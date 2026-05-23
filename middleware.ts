@@ -18,10 +18,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  return new NextResponse("Admin authentication required", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Vimicx Board Settings"' }
-  });
+  return NextResponse.redirect(new URL("/board?settings=locked", request.url));
 }
 
 export const config = {
@@ -36,3 +33,5 @@ function parseBasicPassword(authorization: string | null) {
   const decoded = atob(authorization.slice("Basic ".length));
   return decoded.split(":").slice(1).join(":");
 }
+
+

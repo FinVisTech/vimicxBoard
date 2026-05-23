@@ -35,3 +35,7 @@ export const createCommentSchema = z.object({
   userId: z.string().nullable().optional(),
   source: sourceEnum.default("WEB")
 });
+
+export const updateCommentSchema = z.object({
+  body: z.string().trim().min(1)
+});

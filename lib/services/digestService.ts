@@ -52,7 +52,7 @@ export async function buildDailyDigest() {
   ]);
 
   return {
-    title: "Vimicx Board - Daily Sync",
+    title: "Vimicx Board - Monday/Friday Sync",
     generatedFor: format(addDays(todayStart, 0), "yyyy-MM-dd"),
     sections: {
       dueToday,
@@ -68,7 +68,7 @@ export async function buildDailyDigest() {
 
 export function formatDigestMessage(input: DigestSections) {
   return [
-    "**Vimicx Board - Daily Sync**",
+    "**Vimicx Board - Monday/Friday Sync**",
     "",
     section("Due Today", input.dueToday),
     section("Overdue", input.overdue),
@@ -79,7 +79,19 @@ export function formatDigestMessage(input: DigestSections) {
   ].join("\n");
 }
 
+export function isDigestSendDay(date = new Date()) {
+  const day = date.getDay();
+  return day === 1 || day === 5;
+}
+
 export async function sendDigestToDiscord() {
+  if (!isDigestSendDay()) {
+    return {
+      skipped: true,
+      reason: "Digest sends only run on Monday and Friday."
+    };
+  }
+
   const digest = await buildDailyDigest();
   const channelId = process.env.DISCORD_CHANNEL_ID;
   const token = process.env.DISCORD_BOT_TOKEN;

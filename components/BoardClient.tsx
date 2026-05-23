@@ -1,10 +1,19 @@
 "use client";
 
-import { DndContext, type DragEndEvent, useDraggable, useDroppable } from "@dnd-kit/core";
+import {
+  DndContext,
+  PointerSensor,
+  closestCorners,
+  type DragEndEvent,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors
+} from "@dnd-kit/core";
 import { formatDistanceToNow } from "date-fns";
 import { AlertTriangle, Bot, CheckCircle2, Clock, MessageSquare, Radio, UserRound } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type User = { id: string; name: string } | null;
 type Task = {
@@ -30,7 +39,13 @@ const priorityStyle = {
 
 export function BoardClient({ board }: { board: Board }) {
   const [columns, setColumns] = useState(board.columns);
+  const [isHydrated, setIsHydrated] = useState(false);
   const columnById = useMemo(() => new Map(columns.map((column) => [column.id, column])), [columns]);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   async function onDragEnd(event: DragEndEvent) {
     const taskId = String(event.active.id);
@@ -61,71 +76,118 @@ export function BoardClient({ board }: { board: Board }) {
     });
   }
 
+  if (!isHydrated) {
+    return <BoardGrid columns={columns} isInteractive={false} />;
+  }
+
   return (
-    <DndContext onDragEnd={onDragEnd}>
-      <div className="grid min-h-[calc(100vh-145px)] grid-cols-1 gap-4 overflow-x-auto pb-6 md:grid-cols-5">
-        {columns.map((column) => (
-          <section key={column.id} id={column.id} className="rounded-lg border border-border bg-slate-50 p-3">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-semibold">{column.name}</h2>
-              <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-500">{column.tasks.length}</span>
-            </div>
-            <div className="space-y-3" data-droppable-id={column.id}>
-              <ColumnDrop id={column.id}>
-                {column.tasks.map((task) => (
-                  <TaskCard key={task.id} task={task} />
-                ))}
-              </ColumnDrop>
-            </div>
-          </section>
-        ))}
-      </div>
+    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
+      <BoardGrid columns={columns} isInteractive />
     </DndContext>
   );
 }
 
-function ColumnDrop({ id, children }: { id: string; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+function BoardGrid({ columns, isInteractive }: { columns: Column[]; isInteractive: boolean }) {
   return (
-    <div ref={setNodeRef} className={isOver ? "min-h-24 rounded-md bg-teal-50" : "min-h-24"}>
-      {children}
+    <div className="grid min-h-[calc(100vh-145px)] grid-cols-1 gap-4 overflow-x-auto pb-6 md:grid-cols-5">
+      {columns.map((column) => (
+        isInteractive ? <ColumnDrop key={column.id} column={column} /> : <StaticColumn key={column.id} column={column} />
+      ))}
     </div>
   );
+}
+
+function ColumnDrop({ column }: { column: Column }) {
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
+
+  return (
+    <section ref={setNodeRef} id={column.id} className={getColumnClassName(isOver)}>
+      <ColumnHeader column={column} />
+      <div className="min-h-24 space-y-3" data-droppable-id={column.id}>
+        {column.tasks.map((task) => (
+          <TaskCard key={task.id} task={task} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StaticColumn({ column }: { column: Column }) {
+  return (
+    <section id={column.id} className={getColumnClassName(false)}>
+      <ColumnHeader column={column} />
+      <div className="min-h-24 space-y-3" data-droppable-id={column.id}>
+        {column.tasks.map((task) => (
+          <StaticTaskCard key={task.id} task={task} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ColumnHeader({ column }: { column: Column }) {
+  return (
+    <div className="mb-3 flex items-center justify-between">
+      <h2 className="text-base font-semibold">{column.name}</h2>
+      <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-500">{column.tasks.length}</span>
+    </div>
+  );
+}
+
+function getColumnClassName(isOver: boolean) {
+  return isOver
+    ? "rounded-lg border border-teal-300 bg-teal-50 p-3 transition-colors"
+    : "rounded-lg border border-border bg-slate-50 p-3 transition-colors";
 }
 
 function TaskCard({ task }: { task: Task }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: task.id });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
-  const SourceIcon = task.source === "DISCORD" ? MessageSquare : task.source === "AGENT" ? Bot : task.source === "SLACK" ? Radio : CheckCircle2;
 
   return (
     <article ref={setNodeRef} style={style} {...listeners} {...attributes} className="cursor-grab rounded-lg border border-border bg-card p-4 shadow-sm">
-      <Link href={`/tasks/${task.id}`} className="block">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <h3 className="text-base font-semibold leading-snug">{task.title}</h3>
-          {task.isBlocked ? <AlertTriangle className="h-5 w-5 shrink-0 text-danger" /> : null}
-        </div>
-        <div className="flex flex-wrap gap-2 text-xs font-semibold">
-          <span className={priorityStyle[task.priority] + " rounded-full px-2 py-1"}>{task.priority}</span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-slate-600">
-            <UserRound className="h-3.5 w-3.5" />
-            {task.assignee?.name ?? "Unassigned"}
-          </span>
-          {task.dueDate ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-slate-600">
-              <Clock className="h-3.5 w-3.5" />
-              {new Date(task.dueDate).toLocaleDateString()}
-            </span>
-          ) : null}
-        </div>
-        <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
-          <span className="inline-flex items-center gap-1">
-            <SourceIcon className="h-3.5 w-3.5" />
-            {task.source}
-          </span>
-          <span>{formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true })}</span>
-        </div>
-      </Link>
+      <TaskCardBody task={task} />
     </article>
+  );
+}
+
+function StaticTaskCard({ task }: { task: Task }) {
+  return (
+    <article className="rounded-lg border border-border bg-card p-4 shadow-sm">
+      <TaskCardBody task={task} />
+    </article>
+  );
+}
+
+function TaskCardBody({ task }: { task: Task }) {
+  const SourceIcon = task.source === "DISCORD" ? MessageSquare : task.source === "AGENT" ? Bot : task.source === "SLACK" ? Radio : CheckCircle2;
+
+  return (
+    <Link href={`/tasks/${task.id}`} className="block">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <h3 className="text-base font-semibold leading-snug">{task.title}</h3>
+        {task.isBlocked ? <AlertTriangle className="h-5 w-5 shrink-0 text-danger" /> : null}
+      </div>
+      <div className="flex flex-wrap gap-2 text-xs font-semibold">
+        <span className={priorityStyle[task.priority] + " rounded-full px-2 py-1"}>{task.priority}</span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-slate-600">
+          <UserRound className="h-3.5 w-3.5" />
+          {task.assignee?.name ?? "Unassigned"}
+        </span>
+        {task.dueDate ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-slate-600">
+            <Clock className="h-3.5 w-3.5" />
+            {new Date(task.dueDate).toLocaleDateString()}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+        <span className="inline-flex items-center gap-1">
+          <SourceIcon className="h-3.5 w-3.5" />
+          {task.source}
+        </span>
+        <span>{formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true })}</span>
+      </div>
+    </Link>
   );
 }

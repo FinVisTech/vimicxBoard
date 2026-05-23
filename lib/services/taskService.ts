@@ -1,4 +1,4 @@
-import { Prisma, type Source } from "@prisma/client";
+import { type Source } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultBoard } from "@/lib/services/bootstrap";
 import { createTaskSchema, updateTaskSchema } from "@/lib/validators/tasks";
@@ -30,7 +30,6 @@ export async function createTask(input: unknown) {
     include: taskInclude
   });
 
-  await logActivity(task.boardId, task.id, createdById, "TASK_CREATED", null, task);
   return task;
 }
 
@@ -63,13 +62,12 @@ export async function updateTask(taskId: string, input: unknown) {
     include: taskInclude
   });
 
-  await logActivity(task.boardId, task.id, null, "TASK_UPDATED", before, task);
   return task;
 }
 
 export async function addTaskComment(taskId: string, input: { body: string; userId?: string | null; source?: Source }) {
-  const task = await prisma.task.findUniqueOrThrow({ where: { id: taskId } });
-  const comment = await prisma.taskComment.create({
+  await prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+  return prisma.taskComment.create({
     data: {
       taskId,
       body: input.body,
@@ -78,8 +76,14 @@ export async function addTaskComment(taskId: string, input: { body: string; user
     },
     include: { user: true }
   });
-  await logActivity(task.boardId, task.id, input.userId ?? null, "COMMENT_ADDED", null, comment);
-  return comment;
+}
+
+export async function updateTaskComment(commentId: string, input: { body: string }) {
+  return prisma.taskComment.update({
+    where: { id: commentId },
+    data: { body: input.body },
+    include: { user: true }
+  });
 }
 
 export async function applyParsedCommand(command: ParsedBoardCommand, source: Source, discordUserId?: string) {
@@ -163,30 +167,9 @@ async function findOrCreateDiscordUser(discordUserId: string) {
   return user.id;
 }
 
-async function logActivity(boardId: string, taskId: string | null, actorId: string | null, actionType: string, before: unknown, after: unknown) {
-  await prisma.activityLog.create({
-    data: {
-      boardId,
-      taskId,
-      actorId,
-      actionType,
-      beforeJson: toJson(before),
-      afterJson: toJson(after)
-    }
-  });
-}
-
-function toJson(value: unknown): Prisma.InputJsonValue | undefined {
-  if (value === null || value === undefined) {
-    return undefined;
-  }
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
-
 const taskInclude = {
   assignee: true,
   createdBy: true,
   column: true,
-  comments: { include: { user: true }, orderBy: { createdAt: "desc" as const } },
-  activity: { include: { actor: true }, orderBy: { createdAt: "desc" as const } }
+  comments: { include: { user: true }, orderBy: { createdAt: "desc" as const } }
 };

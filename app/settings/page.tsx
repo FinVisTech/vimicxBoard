@@ -16,7 +16,7 @@ export default async function SettingsPage() {
           <dl className="mt-4 grid gap-3 text-sm">
             <Row label="Guild ID" value={board.workspace.discordGuildId ?? "Set DISCORD_GUILD_ID"} />
             <Row label="Digest Channel ID" value={board.workspace.discordChannelId ?? "Set DISCORD_CHANNEL_ID"} />
-            <Row label="Daily Digest" value={`${board.workspace.dailyDigestTime} ${board.workspace.timezone}`} />
+            <Row label="Mon/Fri Digest" value={`${board.workspace.dailyDigestTime} ${board.workspace.timezone}`} />
           </dl>
         </section>
         <section className="rounded-lg border border-border bg-white p-5">

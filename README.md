@@ -73,7 +73,7 @@ Open `http://localhost:3000/board`.
 @board blockers
 ```
 
-## Daily Digest
+## Monday/Friday Digest
 
 Preview digest:
 
@@ -87,10 +87,16 @@ Send digest to Discord:
 curl -X POST "http://localhost:3000/api/digest/send?secret=replace-me"
 ```
 
-Cron target for Vercel/Railway:
+Cron target for Vercel/Railway. Schedule this only on Mondays and Fridays:
 
 ```text
 POST /api/digest/send?secret=$CRON_SECRET
+```
+
+Example cron expression for Monday and Friday:
+
+```text
+30 15 * * 1,5
 ```
 
 ## Deployment

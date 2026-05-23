@@ -10,8 +10,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       assignee: true,
       createdBy: true,
       column: true,
-      comments: { include: { user: true }, orderBy: { createdAt: "desc" } },
-      activity: { include: { actor: true }, orderBy: { createdAt: "desc" } }
+      comments: { include: { user: true }, orderBy: { createdAt: "desc" } }
     }
   });
   return NextResponse.json(task);

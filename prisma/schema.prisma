@@ -52,7 +52,6 @@ model User {
   assignedTasks Task[]       @relation("TaskAssignee")
   createdTasks  Task[]       @relation("TaskCreator")
   comments      TaskComment[]
-  activityLogs  ActivityLog[]
 }
 
 model Board {
@@ -64,7 +63,6 @@ model Board {
   workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   columns     BoardColumn[]
   tasks       Task[]
-  activity    ActivityLog[]
 
   @@index([workspaceId])
 }
@@ -105,7 +103,6 @@ model Task {
   assignee         User?         @relation("TaskAssignee", fields: [assigneeId], references: [id])
   createdBy        User?         @relation("TaskCreator", fields: [createdById], references: [id])
   comments         TaskComment[]
-  activity         ActivityLog[]
 
   @@index([boardId, columnId])
   @@index([assigneeId])
@@ -119,25 +116,9 @@ model TaskComment {
   body      String
   source    Source   @default(WEB)
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user      User?    @relation(fields: [userId], references: [id])
 
   @@index([taskId, createdAt])
-}
-
-model ActivityLog {
-  id         String   @id @default(cuid())
-  boardId    String
-  taskId     String?
-  actorId    String?
-  actionType String
-  beforeJson Json?
-  afterJson  Json?
-  createdAt  DateTime @default(now())
-  board      Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  task       Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  actor      User?    @relation(fields: [actorId], references: [id])
-
-  @@index([boardId, createdAt])
-  @@index([taskId])
 }

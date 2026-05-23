@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { TaskComments } from "@/components/TaskComments";
+import { TaskPrioritySelect } from "@/components/TaskPrioritySelect";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +12,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
     include: {
       assignee: true,
       column: true,
-      comments: { include: { user: true }, orderBy: { createdAt: "desc" } },
-      activity: { include: { actor: true }, orderBy: { createdAt: "desc" } }
+      comments: { include: { user: true }, orderBy: { createdAt: "desc" } }
     }
   });
 
@@ -26,7 +27,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
             <p className="text-sm font-semibold text-slate-500">{task.column.name}</p>
             <h1 className="mt-1 text-3xl font-bold">{task.title}</h1>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold">{task.priority}</span>
+          <TaskPrioritySelect taskId={task.id} initialPriority={task.priority} />
         </div>
         <div className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
           <Field label="Owner" value={task.assignee?.name ?? "Unassigned"} />
@@ -41,31 +42,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           </div>
         ) : null}
       </section>
-      <div className="mt-6 grid gap-5 md:grid-cols-2">
-        <section className="rounded-lg border border-border bg-white p-5">
-          <h2 className="text-lg font-semibold">Comments</h2>
-          <div className="mt-4 space-y-3">
-            {task.comments.length === 0 ? <p className="text-sm text-slate-500">No comments yet.</p> : null}
-            {task.comments.map((comment) => (
-              <div key={comment.id} className="rounded-md bg-slate-50 p-3 text-sm">
-                <p>{comment.body}</p>
-                <p className="mt-2 text-xs text-slate-500">{comment.user?.name ?? comment.source}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="rounded-lg border border-border bg-white p-5">
-          <h2 className="text-lg font-semibold">Activity</h2>
-          <div className="mt-4 space-y-3">
-            {task.activity.map((item) => (
-              <div key={item.id} className="rounded-md bg-slate-50 p-3 text-sm">
-                <p className="font-semibold">{item.actionType}</p>
-                <p className="mt-1 text-xs text-slate-500">{item.createdAt.toLocaleString()}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
+      <TaskComments taskId={task.id} initialComments={JSON.parse(JSON.stringify(task.comments))} />
     </main>
   );
 }

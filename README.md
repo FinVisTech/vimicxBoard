@@ -22,7 +22,8 @@ npm install
 2. Create `.env` from `.env.example` and set at least:
 
 ```bash
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/vimicx_board"
+DATABASE_URL="postgresql://postgres.PROJECT_REF:password@aws-1-us-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require"
+DIRECT_URL="postgresql://postgres:password@db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require"
 OPENAI_API_KEY="..."
 DISCORD_BOT_TOKEN="..."
 DISCORD_CLIENT_ID="..."
@@ -32,6 +33,8 @@ NEXTAUTH_SECRET="replace-me"
 CRON_SECRET="replace-me"
 ```
 
+
+For Supabase, use the pooler URL for `DATABASE_URL` so Vercel/serverless runtime can connect reliably. Keep `DIRECT_URL` as the direct database URL for Prisma schema commands like `db:push` and `db:migrate`.
 3. Create/update the database and seed sample Vimicx data:
 
 ```bash
@@ -165,3 +168,4 @@ npm test
 ```
 
 The tests cover natural-language parsing and task service creation behavior.
+

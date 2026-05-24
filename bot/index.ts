@@ -1,6 +1,7 @@
 import "dotenv/config";
-import { Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits, TextChannel } from "discord.js";
 import { handleDiscordBoardCommand } from "../lib/services/discordCommandService";
+import { pollNotesBotCalls } from "../lib/services/notesbotService";
 
 const token = process.env.DISCORD_BOT_TOKEN;
 
@@ -12,8 +13,39 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
+const POLL_INTERVAL_MS = parseInt(process.env.NOTESBOT_POLL_INTERVAL_MS ?? "300000");
+
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Vimicx Board bot logged in as ${readyClient.user.tag}`);
+
+  if (!process.env.NOTESBOT_API_KEY) {
+    console.log("[notesbot] NOTESBOT_API_KEY not set — polling disabled");
+    return;
+  }
+
+  console.log(`[notesbot] Polling every ${POLL_INTERVAL_MS / 1000}s`);
+
+  setInterval(async () => {
+    try {
+      const result = await pollNotesBotCalls();
+      if (result.newCalls === 0) return;
+
+      console.log(`[notesbot] Processed ${result.newCalls} call(s), ${result.newPendingTasks} action item(s) queued`);
+
+      const channelId = process.env.NOTESBOT_REVIEW_CHANNEL_ID;
+      if (!channelId || result.newPendingTasks === 0) return;
+
+      const channel = await client.channels.fetch(channelId);
+      if (channel instanceof TextChannel) {
+        const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
+        await channel.send(
+          `**Meeting Review** — ${result.newPendingTasks} action item(s) extracted from ${result.newCalls} meeting(s) and queued for review.\n${appUrl}/review`
+        );
+      }
+    } catch (err) {
+      console.error("[notesbot] Poll error:", err);
+    }
+  }, POLL_INTERVAL_MS);
 });
 
 client.on(Events.MessageCreate, async (message) => {

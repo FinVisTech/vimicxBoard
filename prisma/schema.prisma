@@ -28,16 +28,17 @@ enum Source {
 }
 
 model Workspace {
-  id               String   @id @default(cuid())
-  name             String
-  discordGuildId   String?
-  discordChannelId String?
-  dailyDigestTime  String   @default("08:30")
-  archiveDoneAfterDays Int   @default(7)
-  timezone         String   @default("America/Los_Angeles")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  boards           Board[]
+  id                    String    @id @default(cuid())
+  name                  String
+  discordGuildId        String?
+  discordChannelId      String?
+  dailyDigestTime       String    @default("08:30")
+  archiveDoneAfterDays  Int       @default(7)
+  timezone              String    @default("America/Los_Angeles")
+  notesbotLastPolledAt  DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  boards                Board[]
 
   @@index([discordGuildId])
 }
@@ -111,6 +112,43 @@ model Task {
   @@index([boardId, archivedAt])
   @@index([assigneeId])
   @@index([dueDate])
+}
+
+enum PendingTaskStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model MeetingCall {
+  id               String        @id @default(cuid())
+  notesbotCallId   String        @unique
+  serverName       String
+  channelName      String
+  durationSeconds  Int
+  participantCount Int
+  summary          String        @db.Text
+  transcript       String        @db.Text
+  recordedAt       DateTime
+  processedAt      DateTime      @default(now())
+  pendingTasks     PendingTask[]
+}
+
+model PendingTask {
+  id            String            @id @default(cuid())
+  meetingCallId String
+  meetingCall   MeetingCall       @relation(fields: [meetingCallId], references: [id])
+  title         String
+  description   String?           @db.Text
+  assigneeName  String?
+  priority      Priority          @default(MEDIUM)
+  status        PendingTaskStatus @default(PENDING)
+  taskId        String?           @unique
+  createdAt     DateTime          @default(now())
+  reviewedAt    DateTime?
+
+  @@index([status])
+  @@index([meetingCallId])
 }
 
 model TaskComment {

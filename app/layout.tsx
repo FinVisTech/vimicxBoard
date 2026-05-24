@@ -19,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="flex items-center gap-4 text-sm font-medium text-slate-600">
               <Link href="/board">Board</Link>
               <Link href="/archive">Archive</Link>
+              <Link href="/review">Review</Link>
               <Link href="/settings" prefetch={false}>Settings</Link>
             </nav>
           </div>

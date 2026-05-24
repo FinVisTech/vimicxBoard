@@ -11,9 +11,13 @@ import {
   useSensors
 } from "@dnd-kit/core";
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, Bot, CheckCircle2, Clock, MessageSquare, Radio, UserRound } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, Clock, MessageSquare, Plus, Radio, Save, UserRound, X } from "lucide-react";
 import Link from "next/link";
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 type User = { id: string; name: string } | null;
 type Task = {
@@ -29,6 +33,7 @@ type Task = {
 };
 type Column = { id: string; name: string; position: number; tasks: Task[] };
 type Board = { id: string; name: string; columns: Column[] };
+type Priority = Task["priority"];
 
 const priorityStyle = {
   LOW: "bg-slate-100 text-slate-600",
@@ -77,13 +82,167 @@ export function BoardClient({ board }: { board: Board }) {
   }
 
   if (!isHydrated) {
-    return <BoardGrid columns={columns} isInteractive={false} />;
+    return (
+      <>
+        <BoardHeader boardName={board.name} columns={columns} onTaskCreated={addTaskToColumn} />
+        <BoardGrid columns={columns} isInteractive={false} />
+      </>
+    );
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
-      <BoardGrid columns={columns} isInteractive />
-    </DndContext>
+    <>
+      <BoardHeader boardName={board.name} columns={columns} onTaskCreated={addTaskToColumn} />
+      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
+        <BoardGrid columns={columns} isInteractive />
+      </DndContext>
+    </>
+  );
+
+  function addTaskToColumn(task: Task) {
+    setColumns((current) =>
+      current.map((column) => (column.id === task.columnId ? { ...column, tasks: [task, ...column.tasks] } : column))
+    );
+  }
+}
+
+function BoardHeader({ boardName, columns, onTaskCreated }: { boardName: string; columns: Column[]; onTaskCreated: (task: Task) => void }) {
+  return (
+    <div className="mb-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-primary">Team memory</p>
+          <h1 className="text-3xl font-bold tracking-normal">{boardName}</h1>
+        </div>
+        <div className="flex w-full flex-col items-stretch gap-2 lg:w-[600px] lg:items-end">
+          <AddTaskPanel columns={columns} onTaskCreated={onTaskCreated} />
+          <p className="text-sm leading-6 text-slate-600">
+            Mention <span className="font-semibold">@board</span> in Discord to add, move, assign, query, or summarize work.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddTaskPanel({ columns, onTaskCreated }: { columns: Column[]; onTaskCreated: (task: Task) => void }) {
+  const defaultColumnName = columns.find((column) => column.name === "To Do")?.name ?? columns[0]?.name ?? "To Do";
+  const [isOpen, setIsOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [assigneeName, setAssigneeName] = useState("");
+  const [priority, setPriority] = useState<Priority>("MEDIUM");
+  const [columnName, setColumnName] = useState(defaultColumnName);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function submitTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    if (title.trim().length < 2) {
+      setError("Add a task title first.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          description: description.trim() || null,
+          assigneeName: assigneeName.trim() || null,
+          priority,
+          columnName,
+          source: "WEB"
+        })
+      });
+      if (!response.ok) throw new Error(await response.text());
+      const task = (await response.json()) as Task;
+      onTaskCreated(task);
+      setTitle("");
+      setDescription("");
+      setAssigneeName("");
+      setPriority("MEDIUM");
+      setColumnName(defaultColumnName);
+      setIsOpen(false);
+    } catch {
+      setError("Could not create that task.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  if (!isOpen) {
+    return (
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className="flex h-10 w-full max-w-[210px] items-center justify-center gap-2 rounded-md border border-primary bg-white px-4 text-sm font-semibold text-primary shadow-sm transition hover:bg-teal-50 lg:self-end"
+      >
+        <Plus className="h-4 w-4" />
+        Add Task
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={submitTask} className="w-full rounded-lg border border-primary bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold">Add Task</h2>
+          <p className="mt-1 text-sm text-slate-600">Manual fallback for when Discord capture is unavailable.</p>
+        </div>
+        <button type="button" onClick={() => setIsOpen(false)} className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100" aria-label="Close add task form">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        <label className="grid gap-1 text-sm font-semibold text-slate-600">
+          Title
+          <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="What needs to get done?" autoFocus />
+        </label>
+        <label className="grid gap-1 text-sm font-semibold text-slate-600">
+          Details
+          <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Notes, acceptance criteria, links, or context" />
+        </label>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="grid gap-1 text-sm font-semibold text-slate-600">
+            Owner
+            <Input value={assigneeName} onChange={(event) => setAssigneeName(event.target.value)} placeholder="Luke, Dalton, etc." />
+          </label>
+          <label className="grid gap-1 text-sm font-semibold text-slate-600">
+            Priority
+            <select value={priority} onChange={(event) => setPriority(event.target.value as Priority)} className="h-10 rounded-md border border-border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-primary/25">
+              <option value="LOW">LOW</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="HIGH">HIGH</option>
+              <option value="URGENT">URGENT</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-semibold text-slate-600">
+            Column
+            <select value={columnName} onChange={(event) => setColumnName(event.target.value)} className="h-10 rounded-md border border-border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-primary/25">
+              {columns.map((column) => (
+                <option key={column.id} value={column.name}>
+                  {column.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={isSaving} className="h-12 gap-2 px-6 text-base">
+          <Save className="h-5 w-5" />
+          Create Task
+        </Button>
+        {error ? <p className="text-sm font-semibold text-red-700">{error}</p> : null}
+      </div>
+    </form>
   );
 }
 

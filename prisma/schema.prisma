@@ -33,6 +33,7 @@ model Workspace {
   discordGuildId   String?
   discordChannelId String?
   dailyDigestTime  String   @default("08:30")
+  archiveDoneAfterDays Int   @default(7)
   timezone         String   @default("America/Los_Angeles")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -99,6 +100,7 @@ model Task {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   completedAt      DateTime?
+  archivedAt       DateTime?
   board            Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)
   column           BoardColumn   @relation(fields: [columnId], references: [id])
   assignee         User?         @relation("TaskAssignee", fields: [assigneeId], references: [id])
@@ -106,6 +108,7 @@ model Task {
   comments         TaskComment[]
 
   @@index([boardId, columnId])
+  @@index([boardId, archivedAt])
   @@index([assigneeId])
   @@index([dueDate])
 }

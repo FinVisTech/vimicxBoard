@@ -1,5 +1,6 @@
 import { DEFAULT_BOARD_NAME, DEFAULT_COLUMNS, DEFAULT_WORKSPACE_NAME } from "@/lib/constants";
 import { prisma } from "@/lib/prisma";
+import { archiveEligibleDoneTasks } from "@/lib/services/archiveService";
 
 export async function ensureDefaultBoard() {
   const workspace = await prisma.workspace.upsert({
@@ -41,12 +42,23 @@ export async function ensureDefaultBoard() {
 
 export async function getBoardSnapshot(boardId = "default-board") {
   await ensureDefaultBoard();
+  await archiveEligibleDoneTasks(boardId);
   return prisma.board.findUniqueOrThrow({
     where: { id: boardId },
     include: {
       workspace: true,
-      columns: { orderBy: { position: "asc" }, include: { tasks: true } },
+      columns: {
+        orderBy: { position: "asc" },
+        include: {
+          tasks: {
+            where: { archivedAt: null },
+            include: { assignee: true, column: true },
+            orderBy: [{ updatedAt: "desc" }]
+          }
+        }
+      },
       tasks: {
+        where: { archivedAt: null },
         include: { assignee: true, column: true },
         orderBy: [{ updatedAt: "desc" }]
       }

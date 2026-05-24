@@ -27,7 +27,12 @@ export const updateTaskSchema = z.object({
   dueDate: z.string().datetime({ offset: true }).nullable().optional(),
   isBlocked: z.boolean().optional(),
   blockerReason: z.string().trim().nullable().optional(),
+  isArchived: z.boolean().optional(),
   source: sourceEnum.default("WEB")
+});
+
+export const updateWorkspaceSettingsSchema = z.object({
+  archiveDoneAfterDays: z.coerce.number().int().min(0).max(365)
 });
 
 export const createCommentSchema = z.object({

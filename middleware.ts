@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
   }
 
   const secret = process.env.NEXTAUTH_SECRET;
-  if (!secret || (process.env.NODE_ENV === "development" && secret === "replace-me")) {
+  if (!secret || process.env.NODE_ENV === "development") {
     return NextResponse.next();
   }
 

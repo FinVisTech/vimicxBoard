@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultBoard } from "@/lib/services/bootstrap";
+import { ArchiveSettingsForm } from "@/components/ArchiveSettingsForm";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,13 @@ export default async function SettingsPage() {
             <Row label="Digest Channel ID" value={board.workspace.discordChannelId ?? "Set DISCORD_CHANNEL_ID"} />
             <Row label="Mon/Fri Digest" value={`${board.workspace.dailyDigestTime} ${board.workspace.timezone}`} />
           </dl>
+        </section>
+        <section className="rounded-lg border border-border bg-white p-5">
+          <h2 className="text-lg font-semibold">Archive</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Done tasks are archived automatically after this many days. Set it to 0 to archive Done tasks the next time the board refreshes.
+          </p>
+          <ArchiveSettingsForm initialDays={board.workspace.archiveDoneAfterDays} />
         </section>
         <section className="rounded-lg border border-border bg-white p-5">
           <h2 className="text-lg font-semibold">People</h2>

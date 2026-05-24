@@ -26,27 +26,27 @@ export async function buildDailyDigest() {
 
   const [dueToday, overdue, inProgress, blocked, completedYesterday, unassigned] = await Promise.all([
     prisma.task.findMany({
-      where: { boardId: board.id, dueDate: { gte: todayStart, lte: todayEnd }, completedAt: null },
+      where: { boardId: board.id, archivedAt: null, dueDate: { gte: todayStart, lte: todayEnd }, completedAt: null },
       include: { assignee: true }
     }),
     prisma.task.findMany({
-      where: { boardId: board.id, dueDate: { lt: todayStart }, completedAt: null },
+      where: { boardId: board.id, archivedAt: null, dueDate: { lt: todayStart }, completedAt: null },
       include: { assignee: true }
     }),
     prisma.task.findMany({
-      where: { boardId: board.id, column: { name: "In Progress" }, completedAt: null },
+      where: { boardId: board.id, archivedAt: null, column: { name: "In Progress" }, completedAt: null },
       include: { assignee: true }
     }),
     prisma.task.findMany({
-      where: { boardId: board.id, OR: [{ isBlocked: true }, { column: { name: "Blocked" } }] },
+      where: { boardId: board.id, archivedAt: null, OR: [{ isBlocked: true }, { column: { name: "Blocked" } }] },
       include: { assignee: true }
     }),
     prisma.task.findMany({
-      where: { boardId: board.id, completedAt: { gte: yesterdayStart, lte: yesterdayEnd } },
+      where: { boardId: board.id, archivedAt: null, completedAt: { gte: yesterdayStart, lte: yesterdayEnd } },
       include: { assignee: true }
     }),
     prisma.task.findMany({
-      where: { boardId: board.id, assigneeId: null, completedAt: null },
+      where: { boardId: board.id, archivedAt: null, assigneeId: null, completedAt: null },
       include: { assignee: true }
     })
   ]);

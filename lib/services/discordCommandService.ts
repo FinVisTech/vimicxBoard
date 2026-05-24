@@ -37,6 +37,7 @@ export async function handleDiscordBoardCommand(input: DiscordCommandInput) {
 async function answerQuery(parsed: Awaited<ReturnType<typeof parseBoardCommand>>) {
   const tasks = await prisma.task.findMany({
     where: {
+      archivedAt: null,
       completedAt: null,
       assignee: parsed.query?.assigneeName ? { name: { equals: parsed.query.assigneeName, mode: "insensitive" } } : undefined,
       column: parsed.query?.status ? { name: { equals: parsed.query.status, mode: "insensitive" } } : undefined,
@@ -56,7 +57,7 @@ async function answerQuery(parsed: Awaited<ReturnType<typeof parseBoardCommand>>
 
 async function answerSummary() {
   const tasks = await prisma.task.findMany({
-    where: { completedAt: null },
+    where: { archivedAt: null, completedAt: null },
     include: { assignee: true, column: true },
     orderBy: [{ updatedAt: "desc" }],
     take: 10

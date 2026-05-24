@@ -45,6 +45,12 @@ export async function updateTask(taskId: string, input: unknown) {
           : null
         : undefined;
   const columnId = data.columnName ? (await findColumn(before.boardId, data.columnName)).id : undefined;
+  const completedAt =
+    data.columnName === undefined
+      ? undefined
+      : data.columnName === "Done"
+        ? before.completedAt ?? new Date()
+        : null;
 
   const task = await prisma.task.update({
     where: { id: taskId },
@@ -57,7 +63,8 @@ export async function updateTask(taskId: string, input: unknown) {
       dueDate: data.dueDate === undefined ? undefined : data.dueDate ? new Date(data.dueDate) : null,
       isBlocked: data.isBlocked,
       blockerReason: data.blockerReason,
-      completedAt: data.columnName === "Done" ? new Date() : data.columnName ? null : undefined
+      completedAt,
+      archivedAt: data.isArchived === undefined ? undefined : data.isArchived ? new Date() : null
     },
     include: taskInclude
   });
@@ -133,6 +140,7 @@ export async function applyParsedCommand(command: ParsedBoardCommand, source: So
 export async function findTaskByTitleOrId(titleOrId: string) {
   return prisma.task.findFirst({
     where: {
+      archivedAt: null,
       OR: [
         { id: titleOrId },
         { title: { equals: titleOrId, mode: "insensitive" } },

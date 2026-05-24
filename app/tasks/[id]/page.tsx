@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { TaskComments } from "@/components/TaskComments";
 import { TaskPrioritySelect } from "@/components/TaskPrioritySelect";
+import { TaskArchiveActions } from "@/components/TaskArchiveActions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,13 +28,17 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
             <p className="text-sm font-semibold text-slate-500">{task.column.name}</p>
             <h1 className="mt-1 text-3xl font-bold">{task.title}</h1>
           </div>
-          <TaskPrioritySelect taskId={task.id} initialPriority={task.priority} />
+          <div className="flex flex-wrap items-center gap-3">
+            <TaskPrioritySelect taskId={task.id} initialPriority={task.priority} />
+            <TaskArchiveActions taskId={task.id} isArchived={Boolean(task.archivedAt)} />
+          </div>
         </div>
         <div className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
           <Field label="Owner" value={task.assignee?.name ?? "Unassigned"} />
           <Field label="Due" value={task.dueDate ? task.dueDate.toLocaleDateString() : "No due date"} />
           <Field label="Source" value={task.source} />
           <Field label="Last Updated" value={task.updatedAt.toLocaleString()} />
+          <Field label="Archive Status" value={task.archivedAt ? `Archived ${task.archivedAt.toLocaleString()}` : "Active"} />
         </div>
         {task.description ? <p className="mt-6 leading-7 text-slate-700">{task.description}</p> : null}
         {task.isBlocked ? (

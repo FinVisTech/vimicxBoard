@@ -151,9 +151,10 @@ export async function pollNotesBotCalls(): Promise<{ newCalls: number; newPendin
     }
   }
 
-  await prisma.workspace.update({
+  await prisma.workspace.upsert({
     where: { id: "default-workspace" },
-    data: { notesbotLastPolledAt: new Date() }
+    update: { notesbotLastPolledAt: new Date() },
+    create: { id: "default-workspace", name: "Vimicx", notesbotLastPolledAt: new Date() }
   });
 
   return { newCalls: newCalls.length, newPendingTasks: totalPendingTasks };

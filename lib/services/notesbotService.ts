@@ -57,6 +57,11 @@ export async function extractTasksFromTranscript(
 ): Promise<ExtractedTask[]> {
   const llm = getLlmClient();
 
+  // ~320k chars ≈ 80k tokens — safe ceiling for gpt-4o-mini's 128k context
+  const safeTranscript = transcript.length > 320_000
+    ? transcript.slice(0, 320_000) + "\n\n[transcript truncated]"
+    : transcript;
+
   const result = await llm.completeJson([
     {
       role: "system",
@@ -65,7 +70,7 @@ export async function extractTasksFromTranscript(
     },
     {
       role: "user",
-      content: JSON.stringify({ summary, transcript, participants })
+      content: JSON.stringify({ summary, transcript: safeTranscript, participants })
     }
   ]);
 

@@ -29,9 +29,8 @@ type ExtractedTask = {
   priority: Priority;
 };
 
-async function fetchNotesBotCalls(apiKey: string, from?: Date): Promise<NotesBotCallListItem[]> {
+async function fetchNotesBotCalls(apiKey: string): Promise<NotesBotCallListItem[]> {
   const params = new URLSearchParams({ per_page: "100" });
-  if (from) params.set("from", from.toISOString());
 
   const res = await fetch(`${NOTESBOT_API_BASE}/v1/calls?${params}`, {
     headers: { Authorization: `Bearer ${apiKey}` }
@@ -107,12 +106,8 @@ export async function pollNotesBotCalls(): Promise<{ newCalls: number; newPendin
   let totalPendingTasks = 0;
 
   try {
-    const workspace = await prisma.workspace.findUnique({ where: { id: "default-workspace" } });
-    const lastPolled = workspace?.notesbotLastPolledAt;
-    await logger.debug("POLL", `Last polled: ${lastPolled?.toISOString() ?? "never"}`);
-
     await logger.info("API", "GET /v1/calls → fetching all calls for account");
-    const calls = await fetchNotesBotCalls(apiKey, lastPolled ?? undefined);
+    const calls = await fetchNotesBotCalls(apiKey);
     await logger.info("API", `GET /v1/calls → ${calls.length} call(s) returned`);
 
     const existingIds = new Set(
@@ -187,8 +182,8 @@ export async function pollNotesBotCalls(): Promise<{ newCalls: number; newPendin
 
     await prisma.workspace.upsert({
       where: { id: "default-workspace" },
-      update: { notesbotLastPolledAt: new Date() },
-      create: { id: "default-workspace", name: "Vimicx", notesbotLastPolledAt: new Date() }
+      update: {},
+      create: { id: "default-workspace", name: "Vimicx" }
     });
 
     await logger.info("POLL", `Poll complete — ${totalNewCalls} new call(s), ${totalPendingTasks} task(s) queued`);

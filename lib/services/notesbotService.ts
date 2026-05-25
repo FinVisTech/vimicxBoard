@@ -29,8 +29,8 @@ type ExtractedTask = {
   priority: Priority;
 };
 
-async function fetchNotesBotCalls(apiKey: string, guildId: string, from?: Date): Promise<NotesBotCallListItem[]> {
-  const params = new URLSearchParams({ server_id: guildId, per_page: "100" });
+async function fetchNotesBotCalls(apiKey: string, from?: Date): Promise<NotesBotCallListItem[]> {
+  const params = new URLSearchParams({ per_page: "100" });
   if (from) params.set("from", from.toISOString());
 
   const res = await fetch(`${NOTESBOT_API_BASE}/v1/calls?${params}`, {
@@ -96,8 +96,8 @@ export async function pollNotesBotCalls(): Promise<{ newCalls: number; newPendin
   const apiKey = process.env.NOTESBOT_API_KEY;
   const guildId = process.env.DISCORD_GUILD_ID;
 
-  if (!apiKey || !guildId) {
-    await logger.warn("POLL", "Skipped — NOTESBOT_API_KEY or DISCORD_GUILD_ID not set");
+  if (!apiKey) {
+    await logger.warn("POLL", "Skipped — NOTESBOT_API_KEY not set");
     return { newCalls: 0, newPendingTasks: 0 };
   }
 
@@ -111,8 +111,8 @@ export async function pollNotesBotCalls(): Promise<{ newCalls: number; newPendin
     const lastPolled = workspace?.notesbotLastPolledAt;
     await logger.debug("POLL", `Last polled: ${lastPolled?.toISOString() ?? "never"}`);
 
-    await logger.info("API", `GET /v1/calls → fetching (server_id=${guildId})`);
-    const calls = await fetchNotesBotCalls(apiKey, guildId, lastPolled ?? undefined);
+    await logger.info("API", "GET /v1/calls → fetching all calls for account");
+    const calls = await fetchNotesBotCalls(apiKey, lastPolled ?? undefined);
     await logger.info("API", `GET /v1/calls → ${calls.length} call(s) returned`);
 
     const existingIds = new Set(

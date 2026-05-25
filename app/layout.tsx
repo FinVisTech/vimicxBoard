@@ -30,6 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   </span>
                 )}
               </Link>
+              <Link href="/compose">Compose</Link>
               <Link href="/logs">Logs</Link>
               <Link href="/settings" prefetch={false}>Settings</Link>
             </nav>

@@ -114,13 +114,20 @@ model Task {
   @@index([dueDate])
 }
 
-model PollLog {
-  id             String   @id @default(cuid())
-  createdAt      DateTime @default(now())
-  callsFound     Int
-  callsNew       Int
-  tasksExtracted Int
-  errorMessage   String?
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+model LogEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  level     LogLevel @default(INFO)
+  category  String
+  message   String
+  meta      String?
 
   @@index([createdAt(sort: Desc)])
 }

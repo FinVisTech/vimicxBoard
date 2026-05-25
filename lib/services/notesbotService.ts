@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getLlmClient } from "@/lib/llm/client";
+import { logger } from "@/lib/logger";
 import type { Priority } from "@prisma/client";
 
 const NOTESBOT_API_BASE = "https://api.notesbot.io";
@@ -36,7 +37,7 @@ async function fetchNotesBotCalls(apiKey: string, guildId: string, from?: Date):
     headers: { Authorization: `Bearer ${apiKey}` }
   });
 
-  if (!res.ok) throw new Error(`NotesBot API error: ${res.status} ${await res.text()}`);
+  if (!res.ok) throw new Error(`NotesBot API ${res.status}: ${await res.text()}`);
   const json = await res.json();
   return json.data as NotesBotCallListItem[];
 }
@@ -45,7 +46,7 @@ async function fetchNotesBotCallDetail(apiKey: string, callId: string): Promise<
   const res = await fetch(`${NOTESBOT_API_BASE}/v1/calls/${callId}`, {
     headers: { Authorization: `Bearer ${apiKey}` }
   });
-  if (!res.ok) throw new Error(`NotesBot API error fetching call ${callId}: ${res.status}`);
+  if (!res.ok) throw new Error(`NotesBot API ${res.status} fetching call ${callId}`);
   const json = await res.json();
   return json.data as NotesBotCallDetail;
 }
@@ -58,7 +59,8 @@ export async function extractTasksFromTranscript(
   const llm = getLlmClient();
 
   // ~320k chars ≈ 80k tokens — safe ceiling for gpt-4o-mini's 128k context
-  const safeTranscript = transcript.length > 320_000
+  const truncated = transcript.length > 320_000;
+  const safeTranscript = truncated
     ? transcript.slice(0, 320_000) + "\n\n[transcript truncated]"
     : transcript;
 
@@ -95,34 +97,58 @@ export async function pollNotesBotCalls(): Promise<{ newCalls: number; newPendin
   const guildId = process.env.DISCORD_GUILD_ID;
 
   if (!apiKey || !guildId) {
-    console.warn("[notesbot] NOTESBOT_API_KEY or DISCORD_GUILD_ID not set, skipping poll");
+    await logger.warn("POLL", "Skipped — NOTESBOT_API_KEY or DISCORD_GUILD_ID not set");
     return { newCalls: 0, newPendingTasks: 0 };
   }
 
-  let calls: NotesBotCallListItem[] = [];
-  let callsNew = 0;
+  await logger.info("POLL", "Poll started");
+
+  let totalNewCalls = 0;
   let totalPendingTasks = 0;
-  let pollError: string | undefined;
 
   try {
     const workspace = await prisma.workspace.findUnique({ where: { id: "default-workspace" } });
-    const lastPolled = workspace?.notesbotLastPolledAt ?? undefined;
+    const lastPolled = workspace?.notesbotLastPolledAt;
+    await logger.debug("POLL", `Last polled: ${lastPolled?.toISOString() ?? "never"}`);
 
-    calls = await fetchNotesBotCalls(apiKey, guildId, lastPolled);
+    await logger.info("API", `GET /v1/calls → fetching (server_id=${guildId})`);
+    const calls = await fetchNotesBotCalls(apiKey, guildId, lastPolled ?? undefined);
+    await logger.info("API", `GET /v1/calls → ${calls.length} call(s) returned`);
 
     const existingIds = new Set(
       (await prisma.meetingCall.findMany({ select: { notesbotCallId: true } })).map((c) => c.notesbotCallId)
     );
 
     const newCalls = calls.filter((c) => !existingIds.has(c.id));
-    callsNew = newCalls.length;
+    totalNewCalls = newCalls.length;
+
+    if (newCalls.length === 0) {
+      await logger.info("POLL", "No new calls — nothing to process");
+    } else {
+      await logger.info("POLL", `${newCalls.length} new call(s) to process`);
+    }
 
     for (const call of newCalls) {
+      await logger.info("API", `GET /v1/calls/${call.id} → fetching detail`, { channel: call.channel_name });
+
       try {
         const detail = await fetchNotesBotCallDetail(apiKey, call.id);
-        const participantNames = detail.participants.map((p) => p.display_name || p.username);
-        const tasks = await extractTasksFromTranscript(detail.summary, detail.transcript, participantNames);
+        await logger.info("API", `Transcript received`, {
+          channel: detail.channel_name,
+          chars: detail.transcript.length,
+          participants: detail.participants.length,
+          truncated: detail.transcript.length > 320_000
+        });
 
+        await logger.info("LLM", `Extracting tasks from "${detail.channel_name}" transcript...`);
+        const tasks = await extractTasksFromTranscript(detail.summary, detail.transcript,
+          detail.participants.map((p) => p.display_name || p.username)
+        );
+        await logger.info("LLM", `Extracted ${tasks.length} task(s)`, {
+          tasks: tasks.map((t) => t.title)
+        });
+
+        await logger.info("DB", `Saving MeetingCall + ${tasks.length} PendingTask(s)...`);
         await prisma.$transaction(async (tx) => {
           const meetingCall = await tx.meetingCall.create({
             data: {
@@ -151,8 +177,11 @@ export async function pollNotesBotCalls(): Promise<{ newCalls: number; newPendin
 
           totalPendingTasks += tasks.length;
         });
+        await logger.info("DB", `Saved — MeetingCall ${call.id} + ${tasks.length} task(s) queued for review`);
+
       } catch (err) {
-        console.error(`[notesbot] Failed to process call ${call.id}:`, err);
+        const msg = err instanceof Error ? err.message : String(err);
+        await logger.error("POLL", `Failed to process call ${call.id}: ${msg}`);
       }
     }
 
@@ -161,19 +190,13 @@ export async function pollNotesBotCalls(): Promise<{ newCalls: number; newPendin
       update: { notesbotLastPolledAt: new Date() },
       create: { id: "default-workspace", name: "Vimicx", notesbotLastPolledAt: new Date() }
     });
+
+    await logger.info("POLL", `Poll complete — ${totalNewCalls} new call(s), ${totalPendingTasks} task(s) queued`);
+
   } catch (err) {
-    pollError = err instanceof Error ? err.message : String(err);
-    console.error("[notesbot] Poll failed:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    await logger.error("POLL", `Poll failed: ${msg}`);
   }
 
-  await prisma.pollLog.create({
-    data: {
-      callsFound: calls.length,
-      callsNew,
-      tasksExtracted: totalPendingTasks,
-      errorMessage: pollError ?? null
-    }
-  });
-
-  return { newCalls: calls.length, newPendingTasks: totalPendingTasks };
+  return { newCalls: totalNewCalls, newPendingTasks: totalPendingTasks };
 }

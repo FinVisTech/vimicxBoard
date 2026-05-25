@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 
 export type LlmMessage = {
-  role: "system" | "user";
+  role: "system" | "user" | "assistant";
   content: string;
 };
 

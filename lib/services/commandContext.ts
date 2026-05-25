@@ -16,7 +16,11 @@ export async function getCommandContext() {
       id: task.id,
       title: task.title,
       columnName: task.column.name,
-      assigneeName: task.assignee?.name ?? null
+      assigneeName: task.assignee?.name ?? null,
+      priority: task.priority,
+      isBlocked: task.isBlocked,
+      blockerReason: task.blockerReason ?? null,
+      dueDate: task.dueDate ? task.dueDate.toISOString() : null
     })),
     columns: board.columns.map((column) => column.name)
   };

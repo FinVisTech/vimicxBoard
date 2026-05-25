@@ -42,7 +42,7 @@ export const parsedBoardCommandSchema = z.object({
       timeframe: z.string().nullable()
     })
     .nullable(),
-  responseMessage: z.string()
+  responseMessage: z.string().nullable()
 });
 
 export type ParsedBoardCommand = z.infer<typeof parsedBoardCommandSchema>;

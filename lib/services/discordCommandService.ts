@@ -10,6 +10,7 @@ export type DiscordCommandInput = {
     username: string;
     displayName?: string;
   };
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
 };
 
 export async function handleDiscordBoardCommand(input: DiscordCommandInput) {
@@ -19,7 +20,8 @@ export async function handleDiscordBoardCommand(input: DiscordCommandInput) {
     discordUser: input.discordUser,
     knownUsers: context.knownUsers,
     knownTasks: context.knownTasks,
-    columns: context.columns
+    columns: context.columns,
+    conversationHistory: input.conversationHistory
   });
 
   if (parsed.intent === "QUERY_TASKS") {

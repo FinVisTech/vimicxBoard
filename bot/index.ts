@@ -16,6 +16,21 @@ const client = new Client({
 
 const POLL_INTERVAL_MS = parseInt(process.env.NOTESBOT_POLL_INTERVAL_MS ?? "300000");
 
+// Per-channel conversation history (last 6 messages = 3 turns)
+type HistoryEntry = { role: "user" | "assistant"; content: string };
+const channelHistory = new Map<string, HistoryEntry[]>();
+
+function getHistory(channelId: string): HistoryEntry[] {
+  return channelHistory.get(channelId) ?? [];
+}
+
+function pushHistory(channelId: string, role: "user" | "assistant", content: string) {
+  const history = channelHistory.get(channelId) ?? [];
+  history.push({ role, content });
+  if (history.length > 6) history.splice(0, history.length - 6);
+  channelHistory.set(channelId, history);
+}
+
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Vimicx Board bot logged in as ${readyClient.user.tag}`);
 
@@ -60,6 +75,9 @@ client.on(Events.MessageCreate, async (message) => {
   const mentioned = message.mentions.users.has(client.user.id) || /(^|\s)@board\b/i.test(message.content);
   if (!mentioned) return;
 
+  const channelId = message.channelId;
+  const history = getHistory(channelId);
+
   try {
     const response = await handleDiscordBoardCommand({
       rawText: message.content,
@@ -67,12 +85,22 @@ client.on(Events.MessageCreate, async (message) => {
         id: message.author.id,
         username: message.author.username,
         displayName: message.member?.displayName
-      }
+      },
+      conversationHistory: history
     });
-    await message.reply(response.message.slice(0, 1900));
+
+    // Stay silent if the bot determined it shouldn't respond
+    if (!response.message) return;
+
+    const reply = response.message.slice(0, 1900);
+    await message.reply(reply);
+
+    // Update history with this exchange
+    pushHistory(channelId, "user", message.content);
+    pushHistory(channelId, "assistant", reply);
   } catch (error) {
     console.error(error);
-    await message.reply("I hit an error while updating the board. Check the bot logs.");
+    await message.reply("Something went wrong on my end. Check the bot logs.");
   }
 });
 

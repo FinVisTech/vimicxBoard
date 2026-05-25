@@ -7,7 +7,7 @@ type Props = { taskId: string };
 
 export default function PendingTaskActions({ taskId }: Props) {
   const router = useRouter();
-  const [state, setState] = useState<"idle" | "approving" | "rejecting" | "done">("idle");
+  const [state, setState] = useState<"idle" | "approving" | "confirming" | "rejecting" | "done">("idle");
 
   async function handleApprove() {
     setState("approving");
@@ -27,20 +27,40 @@ export default function PendingTaskActions({ taskId }: Props) {
 
   return (
     <div className="flex shrink-0 gap-2">
-      <button
-        onClick={handleApprove}
-        disabled={state !== "idle"}
-        className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-      >
-        {state === "approving" ? "Adding…" : "Approve → Backlog"}
-      </button>
-      <button
-        onClick={handleReject}
-        disabled={state !== "idle"}
-        className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-50"
-      >
-        {state === "rejecting" ? "Rejecting…" : "Reject"}
-      </button>
+      {state === "confirming" ? (
+        <>
+          <span className="flex items-center text-xs text-slate-500">Delete this task?</span>
+          <button
+            onClick={handleReject}
+            className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
+          >
+            Yes, delete
+          </button>
+          <button
+            onClick={() => setState("idle")}
+            className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-slate-600"
+          >
+            Cancel
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            onClick={handleApprove}
+            disabled={state !== "idle"}
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            {state === "approving" ? "Adding…" : "Approve → Backlog"}
+          </button>
+          <button
+            onClick={() => setState("confirming")}
+            disabled={state !== "idle"}
+            className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-50"
+          >
+            Reject
+          </button>
+        </>
+      )}
     </div>
   );
 }

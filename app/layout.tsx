@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -7,7 +8,9 @@ export const metadata: Metadata = {
   description: "A fast team memory layer for Vimicx tasks."
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const pendingCount = await prisma.pendingTask.count({ where: { status: "PENDING" } }).catch(() => 0);
+
   return (
     <html lang="en">
       <body className="min-h-screen font-sans antialiased">
@@ -19,7 +22,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="flex items-center gap-4 text-sm font-medium text-slate-600">
               <Link href="/board">Board</Link>
               <Link href="/archive">Archive</Link>
-              <Link href="/review">Review</Link>
+              <Link href="/review" className="relative">
+                Review
+                {pendingCount > 0 && (
+                  <span className="absolute -right-4 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                    {pendingCount > 99 ? "99+" : pendingCount}
+                  </span>
+                )}
+              </Link>
               <Link href="/logs">Logs</Link>
               <Link href="/settings" prefetch={false}>Settings</Link>
             </nav>

@@ -8,10 +8,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!pending) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (pending.status !== "PENDING") return NextResponse.json({ error: "Already reviewed" }, { status: 409 });
 
-  await prisma.pendingTask.update({
-    where: { id },
-    data: { status: "REJECTED", reviewedAt: new Date() }
-  });
+  await prisma.pendingTask.delete({ where: { id } });
 
   return NextResponse.json({ ok: true });
 }

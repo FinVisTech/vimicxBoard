@@ -2,6 +2,7 @@ import "dotenv/config";
 import { Client, Events, GatewayIntentBits, TextChannel } from "discord.js";
 import { handleDiscordBoardCommand } from "../lib/services/discordCommandService";
 import { pollNotesBotCalls } from "../lib/services/notesbotService";
+import { logger } from "../lib/logger";
 
 const token = process.env.DISCORD_BOT_TOKEN;
 
@@ -15,11 +16,17 @@ const client = new Client({
 
 const POLL_INTERVAL_MS = parseInt(process.env.NOTESBOT_POLL_INTERVAL_MS ?? "300000");
 
-client.once(Events.ClientReady, (readyClient) => {
+client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Vimicx Board bot logged in as ${readyClient.user.tag}`);
 
-  if (!process.env.NOTESBOT_API_KEY) {
-    console.log("[notesbot] NOTESBOT_API_KEY not set — polling disabled");
+  const hasApiKey = !!process.env.NOTESBOT_API_KEY;
+  await logger.info("SYSTEM", `Bot online as ${readyClient.user.tag}`, {
+    pollIntervalSec: POLL_INTERVAL_MS / 1000,
+    notesbotEnabled: hasApiKey
+  });
+
+  if (!hasApiKey) {
+    await logger.warn("SYSTEM", "NOTESBOT_API_KEY not set — polling disabled");
     return;
   }
 

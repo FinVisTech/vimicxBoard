@@ -52,6 +52,34 @@ export function BoardClient({ board }: { board: Board }) {
     setIsHydrated(true);
   }, []);
 
+  useEffect(() => {
+    setColumns(board.columns);
+  }, [board.columns]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function refreshBoardSnapshot() {
+      try {
+        const response = await fetch(`/api/boards/${board.id}`, {
+          cache: "no-store",
+          signal: controller.signal
+        });
+        if (!response.ok) return;
+        const latestBoard = (await response.json()) as Board;
+        setColumns(latestBoard.columns);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+
+    refreshBoardSnapshot();
+
+    return () => {
+      controller.abort();
+    };
+  }, [board.id]);
+
   async function onDragEnd(event: DragEndEvent) {
     const taskId = String(event.active.id);
     const columnId = event.over?.id ? String(event.over.id) : null;

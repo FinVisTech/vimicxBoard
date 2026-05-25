@@ -99,63 +99,81 @@ export async function pollNotesBotCalls(): Promise<{ newCalls: number; newPendin
     return { newCalls: 0, newPendingTasks: 0 };
   }
 
-  const workspace = await prisma.workspace.findUnique({ where: { id: "default-workspace" } });
-  const lastPolled = workspace?.notesbotLastPolledAt ?? undefined;
-
-  const calls = await fetchNotesBotCalls(apiKey, guildId, lastPolled);
-
-  const existingIds = new Set(
-    (await prisma.meetingCall.findMany({ select: { notesbotCallId: true } })).map((c) => c.notesbotCallId)
-  );
-
-  const newCalls = calls.filter((c) => !existingIds.has(c.id));
-
+  let calls: NotesBotCallListItem[] = [];
+  let callsNew = 0;
   let totalPendingTasks = 0;
+  let pollError: string | undefined;
 
-  for (const call of newCalls) {
-    try {
-      const detail = await fetchNotesBotCallDetail(apiKey, call.id);
-      const participantNames = detail.participants.map((p) => p.display_name || p.username);
-      const tasks = await extractTasksFromTranscript(detail.summary, detail.transcript, participantNames);
+  try {
+    const workspace = await prisma.workspace.findUnique({ where: { id: "default-workspace" } });
+    const lastPolled = workspace?.notesbotLastPolledAt ?? undefined;
 
-      await prisma.$transaction(async (tx) => {
-        const meetingCall = await tx.meetingCall.create({
-          data: {
-            notesbotCallId: detail.id,
-            serverName: detail.server_name,
-            channelName: detail.channel_name,
-            durationSeconds: detail.duration,
-            participantCount: detail.participant_count,
-            summary: detail.summary,
-            transcript: detail.transcript,
-            recordedAt: new Date(detail.created_at)
-          }
-        });
+    calls = await fetchNotesBotCalls(apiKey, guildId, lastPolled);
 
-        if (tasks.length > 0) {
-          await tx.pendingTask.createMany({
-            data: tasks.map((t) => ({
-              meetingCallId: meetingCall.id,
-              title: t.title,
-              description: t.description,
-              assigneeName: t.assigneeName,
-              priority: t.priority
-            }))
+    const existingIds = new Set(
+      (await prisma.meetingCall.findMany({ select: { notesbotCallId: true } })).map((c) => c.notesbotCallId)
+    );
+
+    const newCalls = calls.filter((c) => !existingIds.has(c.id));
+    callsNew = newCalls.length;
+
+    for (const call of newCalls) {
+      try {
+        const detail = await fetchNotesBotCallDetail(apiKey, call.id);
+        const participantNames = detail.participants.map((p) => p.display_name || p.username);
+        const tasks = await extractTasksFromTranscript(detail.summary, detail.transcript, participantNames);
+
+        await prisma.$transaction(async (tx) => {
+          const meetingCall = await tx.meetingCall.create({
+            data: {
+              notesbotCallId: detail.id,
+              serverName: detail.server_name,
+              channelName: detail.channel_name,
+              durationSeconds: detail.duration,
+              participantCount: detail.participant_count,
+              summary: detail.summary,
+              transcript: detail.transcript,
+              recordedAt: new Date(detail.created_at)
+            }
           });
-        }
 
-        totalPendingTasks += tasks.length;
-      });
-    } catch (err) {
-      console.error(`[notesbot] Failed to process call ${call.id}:`, err);
+          if (tasks.length > 0) {
+            await tx.pendingTask.createMany({
+              data: tasks.map((t) => ({
+                meetingCallId: meetingCall.id,
+                title: t.title,
+                description: t.description,
+                assigneeName: t.assigneeName,
+                priority: t.priority
+              }))
+            });
+          }
+
+          totalPendingTasks += tasks.length;
+        });
+      } catch (err) {
+        console.error(`[notesbot] Failed to process call ${call.id}:`, err);
+      }
     }
+
+    await prisma.workspace.upsert({
+      where: { id: "default-workspace" },
+      update: { notesbotLastPolledAt: new Date() },
+      create: { id: "default-workspace", name: "Vimicx", notesbotLastPolledAt: new Date() }
+    });
+  } catch (err) {
+    pollError = err instanceof Error ? err.message : String(err);
+    console.error("[notesbot] Poll failed:", err);
   }
 
-  await prisma.workspace.upsert({
-    where: { id: "default-workspace" },
-    update: { notesbotLastPolledAt: new Date() },
-    create: { id: "default-workspace", name: "Vimicx", notesbotLastPolledAt: new Date() }
+  await prisma.pollLog.create({
+    data: {
+      callsFound: calls.length,
+      callsNew,
+      tasksExtracted: totalPendingTasks,
+      errorMessage: pollError ?? null
+    }
   });
 
-  return { newCalls: newCalls.length, newPendingTasks: totalPendingTasks };
+  return { newCalls: calls.length, newPendingTasks: totalPendingTasks };
 }

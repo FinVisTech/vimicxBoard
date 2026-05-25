@@ -114,6 +114,17 @@ model Task {
   @@index([dueDate])
 }
 
+model PollLog {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  callsFound     Int
+  callsNew       Int
+  tasksExtracted Int
+  errorMessage   String?
+
+  @@index([createdAt(sort: Desc)])
+}
+
 enum PendingTaskStatus {
   PENDING
   APPROVED

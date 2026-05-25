@@ -20,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/board">Board</Link>
               <Link href="/archive">Archive</Link>
               <Link href="/review">Review</Link>
+              <Link href="/logs">Logs</Link>
               <Link href="/settings" prefetch={false}>Settings</Link>
             </nav>
           </div>

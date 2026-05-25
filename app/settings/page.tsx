@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultBoard } from "@/lib/services/bootstrap";
 import { ArchiveSettingsForm } from "@/components/ArchiveSettingsForm";
+import { PeopleSettings } from "@/components/PeopleSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -29,14 +30,10 @@ export default async function SettingsPage() {
         </section>
         <section className="rounded-lg border border-border bg-white p-5">
           <h2 className="text-lg font-semibold">People</h2>
-          <div className="mt-4 grid gap-2">
-            {users.map((user) => (
-              <div key={user.id} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
-                <span className="font-semibold">{user.name}</span>
-                <span className="text-slate-500">{user.discordUserId ? `Discord ${user.discordUserId}` : "No Discord link"}</span>
-              </div>
-            ))}
-          </div>
+          <p className="mt-1 text-sm text-slate-500">
+            Map meeting names to Discord user IDs so the bot can tag people in notifications.
+          </p>
+          <PeopleSettings initialMembers={users} />
         </section>
       </div>
     </main>

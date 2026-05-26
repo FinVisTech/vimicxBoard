@@ -84,6 +84,16 @@ export default async function ReviewPage() {
                         {task.description && (
                           <p className="mt-1 text-sm leading-5 text-slate-600">{task.description}</p>
                         )}
+                        {task.contextNotes && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-xs font-semibold text-slate-400 hover:text-slate-600">
+                              Meeting context
+                            </summary>
+                            <p className="mt-1.5 whitespace-pre-wrap rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600 border border-slate-100">
+                              {task.contextNotes}
+                            </p>
+                          </details>
+                        )}
                       </div>
                       <PendingTaskActions taskId={task.id} />
                     </div>

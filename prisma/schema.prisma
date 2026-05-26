@@ -158,6 +158,7 @@ model PendingTask {
   meetingCall   MeetingCall       @relation(fields: [meetingCallId], references: [id])
   title         String
   description   String?           @db.Text
+  contextNotes  String?           @db.Text
   assigneeName  String?
   priority      Priority          @default(MEDIUM)
   status        PendingTaskStatus @default(PENDING)

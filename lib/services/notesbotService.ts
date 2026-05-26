@@ -25,6 +25,7 @@ type NotesBotCallDetail = NotesBotCallListItem & {
 type ExtractedTask = {
   title: string;
   description: string | null;
+  contextNotes: string | null;
   assigneeName: string | null;
   priority: Priority;
 };
@@ -67,7 +68,7 @@ export async function extractTasksFromTranscript(
     {
       role: "system",
       content:
-        "You extract concrete action items from meeting transcripts. Return a JSON object with a `tasks` array. Each task has: title (short verb phrase, max 80 chars), description (1-2 sentences of context or null), assigneeName (exact name of person responsible from participant list or null), priority (LOW, MEDIUM, HIGH, or URGENT — default MEDIUM). Only include tasks with a clear owner or deliverable. Exclude vague discussion points."
+        "You extract concrete action items from meeting transcripts. Return a JSON object with a `tasks` array. Each task has: title (short verb phrase, max 80 chars), description (1-2 sentence summary of what the task is, or null), contextNotes (a detailed paragraph capturing the full discussion around this task — include what was said about it, any specific decisions made, requirements mentioned, constraints, or direct quotes from participants that add useful context; null only if nothing further was discussed beyond the task title), assigneeName (exact name from the participant list of the person responsible, or null), priority (LOW, MEDIUM, HIGH, or URGENT — default MEDIUM). Only include tasks with a clear owner or deliverable. Exclude vague discussion points."
     },
     {
       role: "user",
@@ -85,6 +86,7 @@ export async function extractTasksFromTranscript(
     .map((t) => ({
       title: String(t.title ?? "").slice(0, 80),
       description: t.description ? String(t.description) : null,
+      contextNotes: t.contextNotes ? String(t.contextNotes) : null,
       assigneeName: t.assigneeName ? String(t.assigneeName) : null,
       priority: validPriorities.has(String(t.priority)) ? (String(t.priority) as Priority) : "MEDIUM"
     }))
@@ -164,6 +166,7 @@ export async function pollNotesBotCalls(): Promise<{ newCalls: number; newPendin
                 meetingCallId: meetingCall.id,
                 title: t.title,
                 description: t.description,
+                contextNotes: t.contextNotes,
                 assigneeName: t.assigneeName,
                 priority: t.priority
               }))

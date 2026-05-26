@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createTask } from "@/lib/services/taskService";
+import { createTask, addTaskComment } from "@/lib/services/taskService";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,6 +17,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     columnName: "Backlog",
     source: "AGENT"
   });
+
+  if (pending.contextNotes) {
+    await addTaskComment(task.id, {
+      body: `**Meeting context:**\n\n${pending.contextNotes}`,
+      source: "AGENT"
+    });
+  }
 
   await prisma.pendingTask.update({
     where: { id },

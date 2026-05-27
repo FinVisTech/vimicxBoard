@@ -3,19 +3,23 @@ import { prisma } from "@/lib/prisma";
 import { TaskComments } from "@/components/TaskComments";
 import { TaskPrioritySelect } from "@/components/TaskPrioritySelect";
 import { TaskArchiveActions } from "@/components/TaskArchiveActions";
+import { TaskOwnerSelect } from "@/components/TaskOwnerSelect";
 
 export const dynamic = "force-dynamic";
 
 export default async function TaskPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const task = await prisma.task.findUniqueOrThrow({
-    where: { id },
-    include: {
-      assignee: true,
-      column: true,
-      comments: { include: { user: true }, orderBy: { createdAt: "desc" } }
-    }
-  });
+  const [task, users] = await Promise.all([
+    prisma.task.findUniqueOrThrow({
+      where: { id },
+      include: {
+        assignee: true,
+        column: true,
+        comments: { include: { user: true }, orderBy: { createdAt: "desc" } }
+      }
+    }),
+    prisma.user.findMany({ orderBy: { name: "asc" } })
+  ]);
 
   return (
     <main className="mx-auto max-w-4xl px-5 py-8">
@@ -29,6 +33,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
             <h1 className="mt-1 text-3xl font-bold">{task.title}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <TaskOwnerSelect taskId={task.id} initialAssigneeId={task.assignee?.id ?? null} users={users} />
             <TaskPrioritySelect taskId={task.id} initialPriority={task.priority} />
             <TaskArchiveActions taskId={task.id} isArchived={Boolean(task.archivedAt)} />
           </div>

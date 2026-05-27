@@ -4,6 +4,7 @@ import { TaskComments } from "@/components/TaskComments";
 import { TaskPrioritySelect } from "@/components/TaskPrioritySelect";
 import { TaskArchiveActions } from "@/components/TaskArchiveActions";
 import { TaskOwnerSelect } from "@/components/TaskOwnerSelect";
+import { TaskDueDatePicker } from "@/components/TaskDueDatePicker";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <TaskOwnerSelect taskId={task.id} initialAssigneeId={task.assignee?.id ?? null} users={users} />
+            <TaskDueDatePicker taskId={task.id} initialDueDate={task.dueDate ? task.dueDate.toISOString() : null} />
             <TaskPrioritySelect taskId={task.id} initialPriority={task.priority} />
             <TaskArchiveActions taskId={task.id} isArchived={Boolean(task.archivedAt)} />
           </div>

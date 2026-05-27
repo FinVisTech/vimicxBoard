@@ -42,6 +42,9 @@ const priorityStyle = {
   URGENT: "bg-red-100 text-red-700"
 };
 
+const priorityRank: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+const byPriority = (a: Task, b: Task) => priorityRank[a.priority] - priorityRank[b.priority];
+
 export function BoardClient({ board }: { board: Board }) {
   const [columns, setColumns] = useState(board.columns);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -291,7 +294,7 @@ function ColumnDrop({ column }: { column: Column }) {
     <section ref={setNodeRef} id={column.id} className={getColumnClassName(isOver)}>
       <ColumnHeader column={column} />
       <div className="min-h-24 space-y-3" data-droppable-id={column.id}>
-        {column.tasks.map((task) => (
+        {[...column.tasks].sort(byPriority).map((task) => (
           <TaskCard key={task.id} task={task} />
         ))}
       </div>
@@ -304,7 +307,7 @@ function StaticColumn({ column }: { column: Column }) {
     <section id={column.id} className={getColumnClassName(false)}>
       <ColumnHeader column={column} />
       <div className="min-h-24 space-y-3" data-droppable-id={column.id}>
-        {column.tasks.map((task) => (
+        {[...column.tasks].sort(byPriority).map((task) => (
           <StaticTaskCard key={task.id} task={task} />
         ))}
       </div>

@@ -3,8 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { TaskComments } from "@/components/TaskComments";
 import { TaskPrioritySelect } from "@/components/TaskPrioritySelect";
 import { TaskArchiveActions } from "@/components/TaskArchiveActions";
-import { TaskOwnerSelect } from "@/components/TaskOwnerSelect";
 import { TaskDueDatePicker } from "@/components/TaskDueDatePicker";
+import { TaskOwnerField } from "@/components/TaskOwnerField";
 
 export const dynamic = "force-dynamic";
 
@@ -34,14 +34,18 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
             <h1 className="mt-1 text-3xl font-bold">{task.title}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <TaskOwnerSelect taskId={task.id} initialAssigneeId={task.assignee?.id ?? null} users={users} />
             <TaskDueDatePicker taskId={task.id} initialDueDate={task.dueDate ? task.dueDate.toISOString() : null} />
             <TaskPrioritySelect taskId={task.id} initialPriority={task.priority} />
             <TaskArchiveActions taskId={task.id} isArchived={Boolean(task.archivedAt)} />
           </div>
         </div>
         <div className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
-          <Field label="Owner" value={task.assignee?.name ?? "Unassigned"} />
+          <TaskOwnerField
+            taskId={task.id}
+            initialAssigneeId={task.assignee?.id ?? null}
+            initialAssigneeName={task.assignee?.name ?? null}
+            users={users}
+          />
           <Field label="Due" value={task.dueDate ? task.dueDate.toLocaleDateString() : "No due date"} />
           <Field label="Source" value={task.source} />
           <Field label="Last Updated" value={task.updatedAt.toLocaleString()} />

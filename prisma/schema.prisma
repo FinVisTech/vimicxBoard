@@ -99,8 +99,9 @@ model Task {
   sourceMessageUrl String?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
-  completedAt      DateTime?
-  archivedAt       DateTime?
+  completedAt       DateTime?
+  archivedAt        DateTime?
+  lastProgressedAt  DateTime?
   board            Board          @relation(fields: [boardId], references: [id], onDelete: Cascade)
   column           BoardColumn    @relation(fields: [columnId], references: [id])
   assignees        TaskAssignee[]

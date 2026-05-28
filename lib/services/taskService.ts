@@ -42,12 +42,14 @@ export async function updateTask(taskId: string, input: unknown) {
   const data = updateTaskSchema.parse(input);
   const before = await prisma.task.findUniqueOrThrow({ where: { id: taskId }, include: taskInclude });
   const columnId = data.columnName ? (await findColumn(before.boardId, data.columnName)).id : undefined;
+  const columnChanged = columnId !== undefined && columnId !== before.columnId;
   const completedAt =
     data.columnName === undefined
       ? undefined
       : data.columnName === "Done"
         ? before.completedAt ?? new Date()
         : null;
+  const lastProgressedAt = columnChanged ? new Date() : undefined;
 
   // Resolve new assignee IDs when any assignee field is provided
   let assigneesUpdate: { deleteMany: object; create: { userId: string }[] } | undefined;
@@ -73,6 +75,7 @@ export async function updateTask(taskId: string, input: unknown) {
       isBlocked: data.isBlocked,
       blockerReason: data.blockerReason,
       completedAt,
+      lastProgressedAt,
       archivedAt: data.isArchived === undefined ? undefined : data.isArchived ? new Date() : null
     },
     include: taskInclude

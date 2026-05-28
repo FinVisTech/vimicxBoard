@@ -5,6 +5,7 @@ import { TaskPrioritySelect } from "@/components/TaskPrioritySelect";
 import { TaskArchiveActions } from "@/components/TaskArchiveActions";
 import { TaskDueDatePicker } from "@/components/TaskDueDatePicker";
 import { TaskOwnerField } from "@/components/TaskOwnerField";
+import { formatDistanceToNow } from "date-fns";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,14 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           />
           <Field label="Source" value={task.source} />
           <Field label="Last Updated" value={task.updatedAt.toLocaleString()} />
-          <Field label="Archive Status" value={task.archivedAt ? `Archived ${task.archivedAt.toLocaleString()}` : "Active"} />
+          <Field
+            label="Last Progressed"
+            value={
+              task.lastProgressedAt
+                ? `${formatDistanceToNow(task.lastProgressedAt, { addSuffix: true })} · ${task.lastProgressedAt.toLocaleString()}`
+                : "Not moved yet"
+            }
+          />
         </div>
         {task.description ? <p className="mt-6 leading-7 text-slate-700">{task.description}</p> : null}
         {task.isBlocked ? (

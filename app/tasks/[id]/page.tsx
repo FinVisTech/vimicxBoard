@@ -46,7 +46,6 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
             initialAssigneeName={task.assignee?.name ?? null}
             users={users}
           />
-          <Field label="Due" value={task.dueDate ? task.dueDate.toLocaleDateString() : "No due date"} />
           <Field label="Source" value={task.source} />
           <Field label="Last Updated" value={task.updatedAt.toLocaleString()} />
           <Field label="Archive Status" value={task.archivedAt ? `Archived ${task.archivedAt.toLocaleString()}` : "Active"} />

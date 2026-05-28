@@ -16,7 +16,7 @@ export async function getCommandContext() {
       id: task.id,
       title: task.title,
       columnName: task.column.name,
-      assigneeName: task.assignee?.name ?? null,
+      assigneeName: task.assignees.map((a) => a.user.name).join(", ") || null,
       priority: task.priority,
       isBlocked: task.isBlocked,
       blockerReason: task.blockerReason ?? null,

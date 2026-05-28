@@ -14,7 +14,7 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
       archivedAt: { not: null }
     },
     include: {
-      assignee: true,
+      assignees: { include: { user: true } },
       column: true,
       comments: { orderBy: { createdAt: "desc" } }
     },

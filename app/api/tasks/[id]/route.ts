@@ -7,7 +7,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const task = await prisma.task.findUniqueOrThrow({
     where: { id },
     include: {
-      assignee: true,
+      assignees: { include: { user: true } },
       createdBy: true,
       column: true,
       comments: { include: { user: true }, orderBy: { createdAt: "desc" } }

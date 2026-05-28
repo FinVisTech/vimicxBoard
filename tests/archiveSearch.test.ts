@@ -8,7 +8,7 @@ const baseTask: ArchiveSearchTask = {
   archivedAt: "2026-05-10T12:00:00.000Z",
   updatedAt: "2026-05-10T12:00:00.000Z",
   column: { name: "Done" },
-  assignee: null,
+  assignees: [],
   comments: []
 };
 
@@ -32,7 +32,7 @@ describe("archive search", () => {
   });
 
   it("matches assignee names", () => {
-    const results = buildArchiveSearchResults([{ ...baseTask, assignee: { name: "Dalton" } }], "dalton");
+    const results = buildArchiveSearchResults([{ ...baseTask, assignees: [{ user: { name: "Dalton" } }] }], "dalton");
 
     expect(results).toHaveLength(1);
     expect(results[0].matchedFields).toContain("assignee");

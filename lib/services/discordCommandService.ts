@@ -41,11 +41,13 @@ async function answerQuery(parsed: Awaited<ReturnType<typeof parseBoardCommand>>
     where: {
       archivedAt: null,
       completedAt: null,
-      assignee: parsed.query?.assigneeName ? { name: { equals: parsed.query.assigneeName, mode: "insensitive" } } : undefined,
+      assignees: parsed.query?.assigneeName
+        ? { some: { user: { name: { equals: parsed.query.assigneeName, mode: "insensitive" } } } }
+        : undefined,
       column: parsed.query?.status ? { name: { equals: parsed.query.status, mode: "insensitive" } } : undefined,
       OR: parsed.query?.status === "Blocked" ? [{ isBlocked: true }, { column: { name: "Blocked" } }] : undefined
     },
-    include: { assignee: true, column: true },
+    include: { assignees: { include: { user: true } }, column: true },
     take: 8,
     orderBy: [{ updatedAt: "desc" }]
   });
@@ -54,20 +56,25 @@ async function answerQuery(parsed: Awaited<ReturnType<typeof parseBoardCommand>>
     return "Nothing matching that right now.";
   }
 
-  return tasks.map((task) => `- ${task.assignee?.name ?? "Unassigned"}: ${task.title} (${task.column.name})`).join("\n");
+  return tasks
+    .map((task) => {
+      const names = task.assignees.map((a) => a.user.name).join(", ");
+      return `- ${names || "Unassigned"}: ${task.title} (${task.column.name})`;
+    })
+    .join("\n");
 }
 
 async function answerSummary() {
   const tasks = await prisma.task.findMany({
     where: { archivedAt: null, completedAt: null },
-    include: { assignee: true, column: true },
+    include: { assignees: { include: { user: true } }, column: true },
     orderBy: [{ updatedAt: "desc" }],
     take: 10
   });
 
   const inProgress = tasks.filter((task) => task.column.name === "In Progress").length;
   const blocked = tasks.filter((task) => task.isBlocked || task.column.name === "Blocked").length;
-  const unassigned = tasks.filter((task) => !task.assigneeId).length;
+  const unassigned = tasks.filter((task) => task.assignees.length === 0).length;
 
   return `Current board: ${inProgress} in progress, ${blocked} blocked, ${unassigned} unassigned.`;
 }

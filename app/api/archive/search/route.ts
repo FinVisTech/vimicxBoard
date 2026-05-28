@@ -12,7 +12,7 @@ export async function GET(request: Request) {
       archivedAt: { not: null }
     },
     include: {
-      assignee: true,
+      assignees: { include: { user: true } },
       column: true,
       comments: { orderBy: { createdAt: "desc" } }
     },

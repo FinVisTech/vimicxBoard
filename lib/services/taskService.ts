@@ -9,8 +9,11 @@ export async function createTask(input: unknown) {
   const data = createTaskSchema.parse(input);
   const board = await ensureDefaultBoard();
   const column = await findColumn(data.boardId ?? board.id, data.columnName);
-  const assigneeId = data.assigneeId ?? (data.assigneeName ? await findOrCreateUserByName(data.assigneeName) : null);
   const createdById = data.createdByDiscordId ? await findOrCreateDiscordUser(data.createdByDiscordId) : null;
+
+  const assigneeIds: string[] = data.assigneeIds
+    ?? (data.assigneeId ? [data.assigneeId] : null)
+    ?? (data.assigneeName ? await findOrCreateUsersByNames(data.assigneeName) : []);
 
   const task = await prisma.task.create({
     data: {
@@ -18,14 +21,16 @@ export async function createTask(input: unknown) {
       columnId: column.id,
       title: data.title,
       description: data.description,
-      assigneeId,
       createdById,
       priority: data.priority,
       dueDate: data.dueDate ? new Date(data.dueDate) : null,
       isBlocked: data.isBlocked,
       blockerReason: data.blockerReason,
       source: data.source,
-      sourceMessageUrl: data.sourceMessageUrl
+      sourceMessageUrl: data.sourceMessageUrl,
+      assignees: assigneeIds.length > 0
+        ? { create: assigneeIds.map((userId) => ({ userId })) }
+        : undefined
     },
     include: taskInclude
   });
@@ -36,14 +41,6 @@ export async function createTask(input: unknown) {
 export async function updateTask(taskId: string, input: unknown) {
   const data = updateTaskSchema.parse(input);
   const before = await prisma.task.findUniqueOrThrow({ where: { id: taskId }, include: taskInclude });
-  const assigneeId =
-    data.assigneeId !== undefined
-      ? data.assigneeId
-      : data.assigneeName !== undefined
-        ? data.assigneeName
-          ? await findOrCreateUserByName(data.assigneeName)
-          : null
-        : undefined;
   const columnId = data.columnName ? (await findColumn(before.boardId, data.columnName)).id : undefined;
   const completedAt =
     data.columnName === undefined
@@ -52,12 +49,24 @@ export async function updateTask(taskId: string, input: unknown) {
         ? before.completedAt ?? new Date()
         : null;
 
+  // Resolve new assignee IDs when any assignee field is provided
+  let assigneesUpdate: { deleteMany: object; create: { userId: string }[] } | undefined;
+  if (data.assigneeIds !== undefined) {
+    assigneesUpdate = { deleteMany: {}, create: data.assigneeIds.map((userId) => ({ userId })) };
+  } else if (data.assigneeId !== undefined) {
+    const ids = data.assigneeId ? [data.assigneeId] : [];
+    assigneesUpdate = { deleteMany: {}, create: ids.map((userId) => ({ userId })) };
+  } else if (data.assigneeName !== undefined) {
+    const ids = data.assigneeName ? await findOrCreateUsersByNames(data.assigneeName) : [];
+    assigneesUpdate = { deleteMany: {}, create: ids.map((userId) => ({ userId })) };
+  }
+
   const task = await prisma.task.update({
     where: { id: taskId },
     data: {
       title: data.title,
       description: data.description,
-      assigneeId,
+      assignees: assigneesUpdate,
       columnId,
       priority: data.priority,
       dueDate: data.dueDate === undefined ? undefined : data.dueDate ? new Date(data.dueDate) : null,
@@ -157,13 +166,15 @@ async function findColumn(boardId: string, name: string) {
   });
 }
 
-async function findOrCreateUserByName(name: string) {
-  const user = await prisma.user.upsert({
-    where: { name },
-    update: {},
-    create: { name }
-  });
-  return user.id;
+async function findOrCreateUsersByNames(nameInput: string): Promise<string[]> {
+  const names = nameInput.split(",").map((n) => n.trim()).filter(Boolean);
+  const ids = await Promise.all(
+    names.map(async (name) => {
+      const user = await prisma.user.upsert({ where: { name }, update: {}, create: { name } });
+      return user.id;
+    })
+  );
+  return ids;
 }
 
 async function findOrCreateDiscordUser(discordUserId: string) {
@@ -176,7 +187,7 @@ async function findOrCreateDiscordUser(discordUserId: string) {
 }
 
 const taskInclude = {
-  assignee: true,
+  assignees: { include: { user: true } },
   createdBy: true,
   column: true,
   comments: { include: { user: true }, orderBy: { createdAt: "desc" as const } }

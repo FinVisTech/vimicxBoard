@@ -5,7 +5,7 @@ import { ensureDefaultBoard } from "@/lib/services/bootstrap";
 type DigestTask = {
   title: string;
   blockerReason?: string | null;
-  assignee?: { name: string } | null;
+  assignees: { user: { name: string } }[];
 };
 
 type DigestSections = {
@@ -27,27 +27,27 @@ export async function buildDailyDigest() {
   const [dueToday, overdue, inProgress, blocked, completedYesterday, unassigned] = await Promise.all([
     prisma.task.findMany({
       where: { boardId: board.id, archivedAt: null, dueDate: { gte: todayStart, lte: todayEnd }, completedAt: null },
-      include: { assignee: true }
+      include: { assignees: { include: { user: true } } }
     }),
     prisma.task.findMany({
       where: { boardId: board.id, archivedAt: null, dueDate: { lt: todayStart }, completedAt: null },
-      include: { assignee: true }
+      include: { assignees: { include: { user: true } } }
     }),
     prisma.task.findMany({
       where: { boardId: board.id, archivedAt: null, column: { name: "In Progress" }, completedAt: null },
-      include: { assignee: true }
+      include: { assignees: { include: { user: true } } }
     }),
     prisma.task.findMany({
       where: { boardId: board.id, archivedAt: null, OR: [{ isBlocked: true }, { column: { name: "Blocked" } }] },
-      include: { assignee: true }
+      include: { assignees: { include: { user: true } } }
     }),
     prisma.task.findMany({
       where: { boardId: board.id, archivedAt: null, completedAt: { gte: yesterdayStart, lte: yesterdayEnd } },
-      include: { assignee: true }
+      include: { assignees: { include: { user: true } } }
     }),
     prisma.task.findMany({
-      where: { boardId: board.id, archivedAt: null, assigneeId: null, completedAt: null },
-      include: { assignee: true }
+      where: { boardId: board.id, archivedAt: null, assignees: { none: {} }, completedAt: null },
+      include: { assignees: { include: { user: true } } }
     })
   ]);
 
@@ -66,7 +66,7 @@ export async function buildDailyDigest() {
   };
 }
 
-export function formatDigestMessage(input: DigestSections) {
+export function formatDigestMessage(input: DigestSections): string {
   return [
     "**Vimicx Board - Monday/Friday Sync**",
     "",
@@ -115,12 +115,13 @@ export async function sendDigestToDiscord() {
   return digest;
 }
 
-function section(title: string, tasks: Array<{ title: string; blockerReason?: string | null; assignee?: { name: string } | null }>, includeReason = false) {
+function section(title: string, tasks: Array<{ title: string; blockerReason?: string | null; assignees: { user: { name: string } }[] }>, includeReason = false) {
   if (tasks.length === 0) {
     return `**${title}:**\n- None`;
   }
   const lines = tasks.map((task) => {
-    const owner = task.assignee?.name ? `${task.assignee.name}: ` : "";
+    const names = task.assignees.map((a) => a.user.name).join(", ");
+    const owner = names ? `${names}: ` : "";
     const reason = includeReason && task.blockerReason ? ` - ${task.blockerReason}` : "";
     return `- ${owner}${task.title}${reason}`;
   });

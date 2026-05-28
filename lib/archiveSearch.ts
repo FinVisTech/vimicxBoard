@@ -11,7 +11,7 @@ export type ArchiveSearchTask = {
   archivedAt: Date | string | null;
   updatedAt: Date | string;
   column: { name: string };
-  assignee: { name: string } | null;
+  assignees: { user: { name: string } }[];
   comments: ArchiveSearchComment[];
 };
 
@@ -63,7 +63,7 @@ export function buildArchiveSearchResults(tasks: ArchiveSearchTask[], query: str
       archivedAt: serializeDate(task.archivedAt),
       updatedAt: serializeDate(task.updatedAt) ?? new Date(0).toISOString(),
       columnName: task.column.name,
-      assigneeName: task.assignee?.name ?? null,
+      assigneeName: task.assignees.map((a) => a.user.name).join(", ") || null,
       latestNote: tokens.length === 0 ? task.comments[0]?.body ?? null : null,
       commentSnippets: tokens.length === 0 ? [] : match.commentSnippets,
       matchedFields: Array.from(match.fields)
@@ -92,7 +92,7 @@ function scoreTask(task: ArchiveSearchTask, tokens: string[]) {
 
   let score = 0;
   score += scoreField(task.title, tokens, 8, fields, "title");
-  score += scoreField(task.assignee?.name ?? "", tokens, 6, fields, "assignee");
+  score += scoreField(task.assignees.map((a) => a.user.name).join(" "), tokens, 6, fields, "assignee");
   score += scoreField(task.description ?? "", tokens, 4, fields, "description");
 
   for (const comment of task.comments) {

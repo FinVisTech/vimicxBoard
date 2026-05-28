@@ -1,76 +1,78 @@
 "use client";
 
+import { X, UserRound, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 type User = { id: string; name: string };
 
 export function TaskOwnerField({
   taskId,
-  initialAssigneeId,
-  initialAssigneeName,
+  initialAssignees,
   users
 }: {
   taskId: string;
-  initialAssigneeId: string | null;
-  initialAssigneeName: string | null;
+  initialAssignees: User[];
   users: User[];
 }) {
-  const [assigneeId, setAssigneeId] = useState(initialAssigneeId);
-  const [assigneeName, setAssigneeName] = useState(initialAssigneeName);
-  const [editing, setEditing] = useState(false);
+  const [assignees, setAssignees] = useState<User[]>(initialAssignees);
+  const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [highlighted, setHighlighted] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const filtered = query.trim().length === 0
-    ? users
-    : users.filter((u) => u.name.toLowerCase().includes(query.toLowerCase()));
+  const assignedIds = new Set(assignees.map((u) => u.id));
+  const filtered = users.filter(
+    (u) => !assignedIds.has(u.id) && (query.trim().length === 0 || u.name.toLowerCase().includes(query.toLowerCase()))
+  );
 
-  // Focus input when editing starts
   useEffect(() => {
-    if (editing) {
+    if (adding) {
       setQuery("");
       setHighlighted(0);
       inputRef.current?.focus();
     }
-  }, [editing]);
+  }, [adding]);
 
-  // Close on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setEditing(false);
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setAdding(false);
         setError(null);
       }
     }
-    if (editing) document.addEventListener("mousedown", handleClick);
+    if (adding) document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [editing]);
+  }, [adding]);
 
-  async function save(user: User | null) {
-    setEditing(false);
+  async function saveAssignees(next: User[]) {
     setIsSaving(true);
     setError(null);
-
-    const prev = { id: assigneeId, name: assigneeName };
-    setAssigneeId(user?.id ?? null);
-    setAssigneeName(user?.name ?? null);
+    const prev = assignees;
+    setAssignees(next);
 
     const res = await fetch(`/api/tasks/${taskId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assigneeId: user?.id ?? null, source: "WEB" })
+      body: JSON.stringify({ assigneeIds: next.map((u) => u.id), source: "WEB" })
     });
 
     setIsSaving(false);
     if (!res.ok) {
-      setAssigneeId(prev.id);
-      setAssigneeName(prev.name);
-      setError("Could not save owner.");
+      setAssignees(prev);
+      setError("Could not save.");
     }
+  }
+
+  function addAssignee(user: User) {
+    setAdding(false);
+    saveAssignees([...assignees, user]);
+  }
+
+  function removeAssignee(userId: string) {
+    saveAssignees(assignees.filter((u) => u.id !== userId));
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -82,73 +84,93 @@ export function TaskOwnerField({
       setHighlighted((h) => Math.max(h - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (filtered[highlighted]) save(filtered[highlighted]);
+      if (filtered[highlighted]) addAssignee(filtered[highlighted]);
     } else if (e.key === "Escape") {
-      setEditing(false);
+      setAdding(false);
       setError(null);
     }
   }
 
-  if (editing) {
-    return (
-      <div ref={containerRef} className="relative rounded-md bg-slate-50 p-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Owner</p>
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setHighlighted(0); }}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a name…"
-          className="mt-1 w-full bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-400"
-        />
-        {filtered.length > 0 && (
-          <ul className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border bg-white shadow-lg">
-            {filtered.map((u, i) => (
-              <li key={u.id}>
-                <button
-                  onMouseDown={(e) => { e.preventDefault(); save(u); }}
-                  onMouseEnter={() => setHighlighted(i)}
-                  className={`w-full px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
-                    i === highlighted ? "bg-primary text-white" : "text-slate-800 hover:bg-slate-50"
-                  }`}
-                >
-                  {u.name}
-                </button>
-              </li>
-            ))}
-            {assigneeId && (
-              <li className="border-t border-border">
-                <button
-                  onMouseDown={(e) => { e.preventDefault(); save(null); }}
-                  className="w-full px-4 py-2.5 text-left text-xs font-semibold text-slate-400 hover:bg-slate-50 hover:text-red-500 transition-colors"
-                >
-                  Remove owner
-                </button>
-              </li>
-            )}
-          </ul>
-        )}
-        {filtered.length === 0 && (
-          <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-border bg-white px-4 py-3 shadow-lg">
-            <p className="text-sm text-slate-400">No match — only team members in Settings can be assigned.</p>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="rounded-md bg-slate-50 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Owner</p>
-      <button
-        onDoubleClick={() => setEditing(true)}
-        title="Double-click to change owner"
-        className="mt-1 w-full text-left text-sm font-semibold text-slate-900 outline-none"
-      >
-        {isSaving ? "Saving…" : (assigneeName ?? "Unassigned")}
-      </button>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {isSaving ? "Saving…" : "Owners"}
+      </p>
+
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {assignees.length === 0 && !adding && (
+          <span className="text-sm font-semibold text-slate-400">Unassigned</span>
+        )}
+        {assignees.map((u) => (
+          <span
+            key={u.id}
+            className="inline-flex items-center gap-1 rounded-full bg-white border border-border px-2.5 py-1 text-xs font-semibold text-slate-700"
+          >
+            <UserRound className="h-3 w-3 text-slate-400" />
+            {u.name}
+            <button
+              type="button"
+              onClick={() => removeAssignee(u.id)}
+              className="ml-0.5 rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-red-500 transition-colors"
+              aria-label={`Remove ${u.name}`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+
+        {!adding && (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-400 hover:border-primary hover:text-primary transition-colors"
+          >
+            <Plus className="h-3 w-3" />
+            Add owner
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <div ref={dropdownRef} className="relative mt-2">
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setHighlighted(0); }}
+            onKeyDown={handleKeyDown}
+            placeholder="Search team members…"
+            className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/25"
+          />
+          {filtered.length > 0 && (
+            <ul className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border bg-white shadow-lg">
+              {filtered.map((u, i) => (
+                <li key={u.id}>
+                  <button
+                    onMouseDown={(e) => { e.preventDefault(); addAssignee(u); }}
+                    onMouseEnter={() => setHighlighted(i)}
+                    className={`w-full px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
+                      i === highlighted ? "bg-primary text-white" : "text-slate-800 hover:bg-slate-50"
+                    }`}
+                  >
+                    {u.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {filtered.length === 0 && (
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-border bg-white px-4 py-3 shadow-lg">
+              <p className="text-sm text-slate-400">
+                {assignees.length === users.length
+                  ? "All team members already assigned."
+                  : "No match — only team members in Settings can be assigned."}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {error && <p className="mt-1 text-xs font-semibold text-red-600">{error}</p>}
-      <p className="mt-1 text-xs text-slate-400 opacity-0 group-hover:opacity-100">Double-click to edit</p>
     </div>
   );
 }

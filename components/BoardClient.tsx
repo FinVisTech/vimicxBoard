@@ -11,15 +11,15 @@ import {
   useSensors
 } from "@dnd-kit/core";
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, Bot, CheckCircle2, Clock, MessageSquare, Plus, Radio, Save, UserRound, X } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, ChevronDown, Clock, MessageSquare, Plus, Radio, Save, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-type User = { id: string; name: string } | null;
+type Assignee = { user: { id: string; name: string } };
 type Task = {
   id: string;
   title: string;
@@ -28,7 +28,7 @@ type Task = {
   isBlocked: boolean;
   source: "WEB" | "DISCORD" | "SLACK" | "AGENT";
   updatedAt: string;
-  assignee: User;
+  assignees: Assignee[];
   columnId: string;
 };
 type Column = { id: string; name: string; position: number; tasks: Task[] };
@@ -48,8 +48,34 @@ const byPriority = (a: Task, b: Task) => priorityRank[a.priority] - priorityRank
 export function BoardClient({ board }: { board: Board }) {
   const [columns, setColumns] = useState(board.columns);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [personFilter, setPersonFilter] = useState<string>("all");
   const columnById = useMemo(() => new Map(columns.map((column) => [column.id, column])), [columns]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const allPeople = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const column of columns) {
+      for (const task of column.tasks) {
+        for (const { user } of task.assignees) {
+          map.set(user.id, user.name);
+        }
+      }
+    }
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [columns]);
+
+  const filteredColumns = useMemo(() => {
+    if (personFilter === "all") return columns;
+    return columns.map((col) => ({
+      ...col,
+      tasks:
+        personFilter === "unassigned"
+          ? col.tasks.filter((t) => t.assignees.length === 0)
+          : col.tasks.filter((t) => t.assignees.some((a) => a.user.id === personFilter))
+    }));
+  }, [columns, personFilter]);
 
   useEffect(() => {
     setIsHydrated(true);
@@ -115,17 +141,17 @@ export function BoardClient({ board }: { board: Board }) {
   if (!isHydrated) {
     return (
       <>
-        <BoardHeader boardName={board.name} columns={columns} onTaskCreated={addTaskToColumn} />
-        <BoardGrid columns={columns} isInteractive={false} />
+        <BoardHeader columns={columns} onTaskCreated={addTaskToColumn} allPeople={allPeople} personFilter={personFilter} onPersonFilterChange={setPersonFilter} />
+        <BoardGrid columns={filteredColumns} isInteractive={false} />
       </>
     );
   }
 
   return (
     <>
-      <BoardHeader boardName={board.name} columns={columns} onTaskCreated={addTaskToColumn} />
+      <BoardHeader columns={columns} onTaskCreated={addTaskToColumn} allPeople={allPeople} personFilter={personFilter} onPersonFilterChange={setPersonFilter} />
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
-        <BoardGrid columns={columns} isInteractive />
+        <BoardGrid columns={filteredColumns} isInteractive />
       </DndContext>
     </>
   );
@@ -137,13 +163,80 @@ export function BoardClient({ board }: { board: Board }) {
   }
 }
 
-function BoardHeader({ boardName, columns, onTaskCreated }: { boardName: string; columns: Column[]; onTaskCreated: (task: Task) => void }) {
+function BoardHeader({
+  columns,
+  onTaskCreated,
+  allPeople,
+  personFilter,
+  onPersonFilterChange
+}: {
+  columns: Column[];
+  onTaskCreated: (task: Task) => void;
+  allPeople: { id: string; name: string }[];
+  personFilter: string;
+  onPersonFilterChange: (value: string) => void;
+}) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    if (dropdownOpen) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [dropdownOpen]);
+
+  const selectedLabel =
+    personFilter === "all"
+      ? "All People"
+      : personFilter === "unassigned"
+        ? "Unassigned"
+        : allPeople.find((p) => p.id === personFilter)?.name ?? "All People";
+
+  const options = [
+    { id: "all", label: "All People" },
+    { id: "unassigned", label: "Unassigned" },
+    ...allPeople.map((p) => ({ id: p.id, label: p.name }))
+  ];
+
   return (
     <div className="mb-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-primary">Team memory</p>
-          <h1 className="text-3xl font-bold tracking-normal">{boardName}</h1>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Filter by person</p>
+          <div ref={dropdownRef} className="relative inline-block">
+            <button
+              type="button"
+              onClick={() => setDropdownOpen((o) => !o)}
+              className="flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2.5 text-lg font-bold text-slate-800 shadow-sm hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/25"
+            >
+              <UserRound className="h-5 w-5 text-primary" />
+              {selectedLabel}
+              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+            {dropdownOpen && (
+              <ul className="absolute left-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-lg border border-border bg-white shadow-lg">
+                {options.map((opt) => (
+                  <li key={opt.id}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => { e.preventDefault(); onPersonFilterChange(opt.id); setDropdownOpen(false); }}
+                      className={`w-full px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
+                        personFilter === opt.id
+                          ? "bg-primary text-white"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
         <div className="flex w-full flex-col items-stretch gap-2 lg:w-[600px] lg:items-end">
           <AddTaskPanel columns={columns} onTaskCreated={onTaskCreated} />
@@ -362,7 +455,7 @@ function TaskCardBody({ task }: { task: Task }) {
         <span className={priorityStyle[task.priority] + " rounded-full px-2 py-1"}>{task.priority}</span>
         <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-slate-600">
           <UserRound className="h-3.5 w-3.5" />
-          {task.assignee?.name ?? "Unassigned"}
+          {task.assignees.length > 0 ? task.assignees.map((a) => a.user.name).join(", ") : "Unassigned"}
         </span>
         {task.dueDate ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-slate-600">

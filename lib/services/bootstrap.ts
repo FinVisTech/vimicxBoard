@@ -52,14 +52,14 @@ export async function getBoardSnapshot(boardId = "default-board") {
         include: {
           tasks: {
             where: { archivedAt: null },
-            include: { assignee: true, column: true },
+            include: { assignees: { include: { user: true } }, column: true },
             orderBy: [{ updatedAt: "desc" }]
           }
         }
       },
       tasks: {
         where: { archivedAt: null },
-        include: { assignee: true, column: true },
+        include: { assignees: { include: { user: true } }, column: true },
         orderBy: [{ updatedAt: "desc" }]
       }
     }

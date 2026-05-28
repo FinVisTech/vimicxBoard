@@ -14,7 +14,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
     prisma.task.findUniqueOrThrow({
       where: { id },
       include: {
-        assignee: true,
+        assignees: { include: { user: true } },
         column: true,
         comments: { include: { user: true }, orderBy: { createdAt: "desc" } }
       }
@@ -42,8 +42,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
         <div className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
           <TaskOwnerField
             taskId={task.id}
-            initialAssigneeId={task.assignee?.id ?? null}
-            initialAssigneeName={task.assignee?.name ?? null}
+            initialAssignees={task.assignees.map((a) => a.user)}
             users={users}
           />
           <Field label="Source" value={task.source} />

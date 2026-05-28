@@ -44,17 +44,17 @@ model Workspace {
 }
 
 model User {
-  id            String       @id @default(cuid())
-  name          String       @unique
-  email         String?      @unique
-  discordUserId String?      @unique
-  slackUserId   String?      @unique
-  role          UserRole     @default(MEMBER)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  assignedTasks Task[]       @relation("TaskAssignee")
-  createdTasks  Task[]       @relation("TaskCreator")
-  comments      TaskComment[]
+  id              String         @id @default(cuid())
+  name            String         @unique
+  email           String?        @unique
+  discordUserId   String?        @unique
+  slackUserId     String?        @unique
+  role            UserRole       @default(MEMBER)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  taskAssignments TaskAssignee[]
+  createdTasks    Task[]         @relation("TaskCreator")
+  comments        TaskComment[]
 }
 
 model Board {
@@ -85,33 +85,42 @@ model BoardColumn {
 }
 
 model Task {
-  id               String        @id @default(cuid())
+  id               String         @id @default(cuid())
   boardId          String
   columnId         String
   title            String
   description      String?
-  assigneeId       String?
   createdById      String?
-  priority         Priority      @default(MEDIUM)
+  priority         Priority       @default(MEDIUM)
   dueDate          DateTime?
-  isBlocked        Boolean       @default(false)
+  isBlocked        Boolean        @default(false)
   blockerReason    String?
-  source           Source        @default(WEB)
+  source           Source         @default(WEB)
   sourceMessageUrl String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
   completedAt      DateTime?
   archivedAt       DateTime?
-  board            Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  column           BoardColumn   @relation(fields: [columnId], references: [id])
-  assignee         User?         @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  createdBy        User?         @relation("TaskCreator", fields: [createdById], references: [id])
+  board            Board          @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  column           BoardColumn    @relation(fields: [columnId], references: [id])
+  assignees        TaskAssignee[]
+  createdBy        User?          @relation("TaskCreator", fields: [createdById], references: [id])
   comments         TaskComment[]
 
   @@index([boardId, columnId])
   @@index([boardId, archivedAt])
-  @@index([assigneeId])
   @@index([dueDate])
+}
+
+model TaskAssignee {
+  taskId String
+  userId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
 }
 
 enum LogLevel {

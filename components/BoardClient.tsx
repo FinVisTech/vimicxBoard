@@ -45,26 +45,17 @@ const priorityStyle = {
 const priorityRank: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 const byPriority = (a: Task, b: Task) => priorityRank[a.priority] - priorityRank[b.priority];
 
-export function BoardClient({ board }: { board: Board }) {
+export function BoardClient({ board, allUsers }: { board: Board; allUsers: { id: string; name: string }[] }) {
   const [columns, setColumns] = useState(board.columns);
   const [isHydrated, setIsHydrated] = useState(false);
   const [personFilter, setPersonFilter] = useState<string>("all");
   const columnById = useMemo(() => new Map(columns.map((column) => [column.id, column])), [columns]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  const allPeople = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const column of columns) {
-      for (const task of column.tasks) {
-        for (const { user } of task.assignees) {
-          map.set(user.id, user.name);
-        }
-      }
-    }
-    return Array.from(map.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [columns]);
+  const allPeople = useMemo(
+    () => [...allUsers].sort((a, b) => a.name.localeCompare(b.name)),
+    [allUsers]
+  );
 
   const filteredColumns = useMemo(() => {
     if (personFilter === "all") return columns;
@@ -211,11 +202,11 @@ function BoardHeader({
             <button
               type="button"
               onClick={() => setDropdownOpen((o) => !o)}
-              className="flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2.5 text-lg font-bold text-slate-800 shadow-sm hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/25"
+              className="flex h-10 items-center gap-2 rounded-md border border-border bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/25"
             >
-              <UserRound className="h-5 w-5 text-primary" />
+              <UserRound className="h-4 w-4 text-primary" />
               {selectedLabel}
-              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
+              <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
             </button>
             {dropdownOpen && (
               <ul className="absolute left-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-lg border border-border bg-white shadow-lg">

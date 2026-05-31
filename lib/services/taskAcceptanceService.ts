@@ -4,6 +4,7 @@ import { logger } from "@/lib/logger";
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 const CUSTOM_ID_PREFIX = "task-owner";
+const MAX_INTERACTIVE_OWNERS = 4;
 
 type AcceptanceWithTaskUser = Prisma.TaskAcceptanceGetPayload<{
   include: { task: true; user: true; clarificationComment: true };
@@ -64,31 +65,30 @@ export async function syncTaskAcceptances(taskId: string, assigneeIds: string[])
     include: acceptanceInclude
   });
 
-  await Promise.all(created.map((acceptance) => sendAcceptancePrompt(acceptance)));
+  await sendTaskAcceptancePrompt(taskId, newUserIds);
   return created;
 }
 
 export async function sendAcceptancePrompt(acceptance: AcceptanceWithTaskUser) {
+  await sendTaskAcceptancePrompt(acceptance.taskId, [acceptance.userId]);
+}
+
+export async function sendTaskAcceptancePrompt(taskId: string, mentionUserIds?: string[], clarification?: string) {
   const token = process.env.DISCORD_BOT_TOKEN;
   const channelId = process.env.DISCORD_CHANNEL_ID;
+  const acceptances = await getTaskAcceptances(taskId);
 
   if (!token || !channelId) {
     await logger.warn("ACCEPTANCE", "Skipped Discord owner prompt because DISCORD_BOT_TOKEN or DISCORD_CHANNEL_ID is not configured", {
-      taskId: acceptance.taskId,
-      userId: acceptance.userId
+      taskId
     });
     return;
   }
 
-  const discordUserId = acceptance.user.discordUserId;
-  if (!discordUserId) {
-    await logger.warn("ACCEPTANCE", "Skipped Discord owner prompt because assignee has no Discord user ID", {
-      taskId: acceptance.taskId,
-      userId: acceptance.userId,
-      userName: acceptance.user.name
-    });
-    return;
-  }
+  const mentionSet = new Set(mentionUserIds ?? acceptances.map((acceptance) => acceptance.userId));
+  const mentionDiscordIds = getMentionDiscordIds(acceptances, mentionSet);
+
+  await logUnmappedMentions(acceptances, mentionSet);
 
   const response = await fetch(`${DISCORD_API_BASE}/channels/${channelId}/messages`, {
     method: "POST",
@@ -97,22 +97,21 @@ export async function sendAcceptancePrompt(acceptance: AcceptanceWithTaskUser) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      ...buildPendingAcceptanceView(acceptance),
-      allowed_mentions: { users: [discordUserId] }
+      ...buildTaskAcceptancePanelView(acceptances, { mentionUserIds: mentionSet, clarification }),
+      allowed_mentions: { users: mentionDiscordIds }
     })
   });
 
   if (!response.ok) {
     await logger.error("ACCEPTANCE", `Discord owner prompt failed: ${response.status} ${await response.text()}`, {
-      taskId: acceptance.taskId,
-      userId: acceptance.userId
+      taskId
     });
     return;
   }
 
   const message = (await response.json()) as { id?: string; channel_id?: string };
-  await prisma.taskAcceptance.update({
-    where: { id: acceptance.id },
+  await prisma.taskAcceptance.updateMany({
+    where: { taskId },
     data: {
       discordChannelId: message.channel_id ?? channelId,
       discordMessageId: message.id ?? null
@@ -145,7 +144,7 @@ export async function addTaskClarificationResponse(taskId: string, input: { body
     include: { user: true }
   });
 
-  const resetAcceptances = await Promise.all(
+  await Promise.all(
     needsClarification.map((acceptance) =>
       prisma.taskAcceptance.update({
         where: { id: acceptance.id },
@@ -154,15 +153,16 @@ export async function addTaskClarificationResponse(taskId: string, input: { body
           requestedAt: new Date(),
           respondedAt: null,
           clarificationCommentId: null
-        },
-        include: acceptanceInclude
+        }
       })
     )
   );
 
-  await Promise.all(resetAcceptances.map((acceptance) => sendClarificationResponsePrompt(acceptance, body)));
+  const resetUserIds = needsClarification.map((acceptance) => acceptance.userId);
+  await sendTaskAcceptancePrompt(taskId, resetUserIds, body);
 
-  return { comment, acceptances: resetAcceptances };
+  const acceptances = await getTaskAcceptances(taskId);
+  return { comment, acceptances };
 }
 
 export async function verifyAcceptanceResponder(taskId: string, userId: string, discordUserId: string) {
@@ -215,8 +215,13 @@ export async function acceptTaskOwnership(taskId: string, userId: string, discor
     ]);
   }
 
-  const acceptance = await getAcceptanceWithTaskUser(verified.acceptance.id);
-  return { ok: true as const, acceptance, view: buildAcceptedAcceptanceView(acceptance), taskUrl: getTaskUrl(taskId) };
+  const acceptances = await getTaskAcceptances(taskId);
+  return {
+    ok: true as const,
+    acceptance: verified.acceptance,
+    view: buildTaskAcceptancePanelView(acceptances),
+    taskUrl: getTaskUrl(taskId)
+  };
 }
 
 export async function requestTaskClarification(taskId: string, userId: string, discordUserId: string, body: string) {
@@ -233,14 +238,14 @@ export async function requestTaskClarification(taskId: string, userId: string, d
       where: { id: verified.acceptance.id },
       data: { status: "NEEDS_CLARIFICATION", respondedAt: new Date() }
     }),
-      prisma.taskComment.create({
-        data: {
-          taskId,
-          userId,
-          source: "DISCORD",
-          body: `Clarification requested by ${verified.acceptance.user.name}:\n\n${cleanedBody}`
-        }
-      })
+    prisma.taskComment.create({
+      data: {
+        taskId,
+        userId,
+        source: "DISCORD",
+        body: `Clarification requested by ${verified.acceptance.user.name}:\n\n${cleanedBody}`
+      }
+    })
   ]);
 
   await prisma.taskAcceptance.update({
@@ -248,11 +253,16 @@ export async function requestTaskClarification(taskId: string, userId: string, d
     data: { clarificationCommentId: comment.id }
   });
 
-  const acceptance = await getAcceptanceWithTaskUser(verified.acceptance.id);
-  return { ok: true as const, acceptance, view: buildClarificationAcceptanceView(acceptance), taskUrl: getTaskUrl(taskId) };
+  const acceptances = await getTaskAcceptances(taskId);
+  return {
+    ok: true as const,
+    acceptance: verified.acceptance,
+    view: buildTaskAcceptancePanelView(acceptances),
+    taskUrl: getTaskUrl(taskId)
+  };
 }
 
-export async function editAcceptancePromptMessage(acceptance: AcceptanceWithTaskUser, view: DiscordMessageView) {
+export async function editAcceptancePromptMessage(acceptance: AcceptanceWithTaskUser, view?: DiscordMessageView) {
   const token = process.env.DISCORD_BOT_TOKEN;
   if (!token || !acceptance.discordChannelId || !acceptance.discordMessageId) return;
 
@@ -264,7 +274,10 @@ export async function editAcceptancePromptMessage(acceptance: AcceptanceWithTask
         Authorization: `Bot ${token}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ ...view, allowed_mentions: { parse: [] } })
+      body: JSON.stringify({
+        ...(view ?? buildTaskAcceptancePanelView(await getTaskAcceptances(acceptance.taskId))),
+        allowed_mentions: { parse: [] }
+      })
     }
   );
 
@@ -278,135 +291,68 @@ export async function editAcceptancePromptMessage(acceptance: AcceptanceWithTask
 }
 
 export function buildAcceptedAcceptanceView(acceptance: AcceptanceWithTaskUser): DiscordMessageView {
-  return {
-    content: `Ownership accepted for **${formatDiscordTitle(acceptance.task.title)}** by ${acceptance.user.name}.`,
-    components: [actionRow([disabledButton("Accepted", 3, acceptance.taskId, acceptance.userId), openTaskButton(acceptance.taskId)])]
-  };
+  return buildTaskAcceptancePanelView([{ ...acceptance, status: "ACCEPTED" }]);
 }
 
 export function buildClarificationAcceptanceView(acceptance: AcceptanceWithTaskUser): DiscordMessageView {
-  return {
-    content: `${acceptance.user.name} asked for clarification on **${formatDiscordTitle(acceptance.task.title)}**. The request was added as a task comment.`,
-    components: [actionRow([disabledButton("Needs clarification", 2, acceptance.taskId, acceptance.userId), openTaskButton(acceptance.taskId)])]
-  };
+  return buildTaskAcceptancePanelView([{ ...acceptance, status: "NEEDS_CLARIFICATION" }]);
 }
 
-export function buildClarificationResponseView(acceptance: AcceptanceWithTaskUser, clarification: string): DiscordMessageView {
-  const preview = clarification.length > 500 ? `${clarification.slice(0, 497)}...` : clarification;
-
-  return {
-    content: `<@${acceptance.user.discordUserId}> clarification was added for **${formatDiscordTitle(acceptance.task.title)}**:\n\n${preview}\n\nCan you accept ownership now?`,
-    components: [
-      actionRow([
-        {
-          type: 2,
-          style: 3,
-          label: "Accept",
-          custom_id: `${CUSTOM_ID_PREFIX}:accept:${acceptance.taskId}:${acceptance.userId}`
-        },
-        {
-          type: 2,
-          style: 2,
-          label: "Needs clarification",
-          custom_id: `${CUSTOM_ID_PREFIX}:clarify:${acceptance.taskId}:${acceptance.userId}`
-        },
-        openTaskButton(acceptance.taskId)
-      ])
-    ]
-  };
+export function buildClarificationResponseView(
+  acceptances: AcceptanceWithTaskUser[],
+  clarification: string,
+  mentionUserIds = new Set(acceptances.map((acceptance) => acceptance.userId))
+): DiscordMessageView {
+  return buildTaskAcceptancePanelView(acceptances, { mentionUserIds, clarification });
 }
 
-async function sendClarificationResponsePrompt(acceptance: AcceptanceWithTaskUser, clarification: string) {
-  const token = process.env.DISCORD_BOT_TOKEN;
-  const channelId = process.env.DISCORD_CHANNEL_ID;
-
-  if (!token || !channelId) {
-    await logger.warn("ACCEPTANCE", "Skipped clarification response prompt because DISCORD_BOT_TOKEN or DISCORD_CHANNEL_ID is not configured", {
-      taskId: acceptance.taskId,
-      userId: acceptance.userId
-    });
-    return;
-  }
-
-  const discordUserId = acceptance.user.discordUserId;
-  if (!discordUserId) {
-    await logger.warn("ACCEPTANCE", "Skipped clarification response prompt because assignee has no Discord user ID", {
-      taskId: acceptance.taskId,
-      userId: acceptance.userId,
-      userName: acceptance.user.name
-    });
-    return;
-  }
-
-  const response = await fetch(`${DISCORD_API_BASE}/channels/${channelId}/messages`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      ...buildClarificationResponseView(acceptance, clarification),
-      allowed_mentions: { users: [discordUserId] }
-    })
-  });
-
-  if (!response.ok) {
-    await logger.error("ACCEPTANCE", `Discord clarification response prompt failed: ${response.status} ${await response.text()}`, {
-      taskId: acceptance.taskId,
-      userId: acceptance.userId
-    });
-    return;
-  }
-
-  const message = (await response.json()) as { id?: string; channel_id?: string };
-  await prisma.taskAcceptance.update({
-    where: { id: acceptance.id },
-    data: {
-      discordChannelId: message.channel_id ?? channelId,
-      discordMessageId: message.id ?? null
-    }
-  });
-}
-
-function buildPendingAcceptanceView(acceptance: AcceptanceWithTaskUser): DiscordMessageView {
-  const dueDate = acceptance.task.dueDate
-    ? `\nDue: ${acceptance.task.dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+export function buildTaskAcceptancePanelView(
+  acceptances: AcceptanceWithTaskUser[],
+  options?: { mentionUserIds?: Set<string>; clarification?: string }
+): DiscordMessageView {
+  const first = acceptances[0];
+  const taskTitle = first ? formatDiscordTitle(first.task.title) : "Task";
+  const mentions = acceptances
+    .filter((acceptance) => options?.mentionUserIds?.has(acceptance.userId))
+    .map((acceptance) => acceptance.user.discordUserId)
+    .filter((discordUserId): discordUserId is string => Boolean(discordUserId))
+    .map((discordUserId) => `<@${discordUserId}>`);
+  const mentionLine = mentions.length > 0 ? `${mentions.join(" ")} you were assigned:` : "Owner acceptance:";
+  const statusLines = acceptances.map((acceptance) => `- ${acceptance.user.name}: ${formatAcceptanceStatus(acceptance.status)}`);
+  const clarification = options?.clarification
+    ? `\n\nClarification added:\n${truncateForDiscord(options.clarification, 500)}`
     : "";
 
+  const pendingOwners = acceptances.filter((acceptance) => acceptance.status === "PENDING");
+  const rows = pendingOwners.slice(0, MAX_INTERACTIVE_OWNERS).map((acceptance) =>
+    actionRow([
+      {
+        type: 2,
+        style: 3,
+        label: `${acceptance.user.name} Accept`.slice(0, 80),
+        custom_id: `${CUSTOM_ID_PREFIX}:accept:${acceptance.taskId}:${acceptance.userId}`
+      },
+      {
+        type: 2,
+        style: 2,
+        label: `${acceptance.user.name} Needs clarification`.slice(0, 80),
+        custom_id: `${CUSTOM_ID_PREFIX}:clarify:${acceptance.taskId}:${acceptance.userId}`
+      }
+    ])
+  );
+
+  if (first && rows.length < 5) {
+    rows.push(actionRow([openTaskButton(first.taskId)]));
+  }
+
   return {
-    content: `<@${acceptance.user.discordUserId}> you were assigned:\n\n**${formatDiscordTitle(acceptance.task.title)}**${dueDate}\n\nAccept ownership?`,
-    components: [
-      actionRow([
-        {
-          type: 2,
-          style: 3,
-          label: "Accept",
-          custom_id: `${CUSTOM_ID_PREFIX}:accept:${acceptance.taskId}:${acceptance.userId}`
-        },
-        {
-          type: 2,
-          style: 2,
-          label: "Needs clarification",
-          custom_id: `${CUSTOM_ID_PREFIX}:clarify:${acceptance.taskId}:${acceptance.userId}`
-        },
-        openTaskButton(acceptance.taskId)
-      ])
-    ]
+    content: `${mentionLine}\n\n**${taskTitle}**${clarification}\n\nOwner status:\n${statusLines.join("\n")}`,
+    components: rows
   };
 }
 
 function actionRow(components: Array<Record<string, unknown>>): DiscordMessageView["components"][number] {
   return { type: 1, components };
-}
-
-function disabledButton(label: string, style: 2 | 3, taskId: string, userId: string) {
-  return {
-    type: 2,
-    style,
-    label,
-    custom_id: `${CUSTOM_ID_PREFIX}:done:${taskId}:${userId}`,
-    disabled: true
-  };
 }
 
 function openTaskButton(taskId: string) {
@@ -422,10 +368,42 @@ function formatDiscordTitle(title: string) {
   return title.replace(/[*_`~|]/g, "\\$&").slice(0, 180);
 }
 
-async function getAcceptanceWithTaskUser(id: string) {
-  return prisma.taskAcceptance.findUniqueOrThrow({
-    where: { id },
-    include: acceptanceInclude
+function formatAcceptanceStatus(status: string) {
+  if (status === "ACCEPTED") return "Accepted";
+  if (status === "NEEDS_CLARIFICATION") return "Needs clarification";
+  if (status === "REJECTED") return "Not accepted";
+  return "Awaiting acceptance";
+}
+
+function truncateForDiscord(value: string, maxLength: number) {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
+}
+
+function getMentionDiscordIds(acceptances: AcceptanceWithTaskUser[], mentionUserIds: Set<string>) {
+  return acceptances
+    .filter((acceptance) => mentionUserIds.has(acceptance.userId))
+    .map((acceptance) => acceptance.user.discordUserId)
+    .filter((discordUserId): discordUserId is string => Boolean(discordUserId));
+}
+
+async function logUnmappedMentions(acceptances: AcceptanceWithTaskUser[], mentionUserIds: Set<string>) {
+  const unmapped = acceptances.filter((acceptance) => mentionUserIds.has(acceptance.userId) && !acceptance.user.discordUserId);
+  await Promise.all(
+    unmapped.map((acceptance) =>
+      logger.warn("ACCEPTANCE", "Skipped mentioning assignee because they have no Discord user ID", {
+        taskId: acceptance.taskId,
+        userId: acceptance.userId,
+        userName: acceptance.user.name
+      })
+    )
+  );
+}
+
+async function getTaskAcceptances(taskId: string) {
+  return prisma.taskAcceptance.findMany({
+    where: { taskId },
+    include: acceptanceInclude,
+    orderBy: { requestedAt: "asc" }
   });
 }
 

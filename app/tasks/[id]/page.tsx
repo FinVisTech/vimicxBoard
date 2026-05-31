@@ -66,7 +66,11 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           </div>
         ) : null}
       </section>
-      <TaskComments taskId={task.id} initialComments={JSON.parse(JSON.stringify(task.comments))} />
+      <TaskComments
+        taskId={task.id}
+        initialComments={JSON.parse(JSON.stringify(task.comments))}
+        initialAcceptances={JSON.parse(JSON.stringify(task.acceptances))}
+      />
     </main>
   );
 }

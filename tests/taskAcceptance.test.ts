@@ -3,6 +3,7 @@ import {
   buildAcceptedAcceptanceView,
   buildClarificationAcceptanceView,
   buildClarificationModalCustomId,
+  buildClarificationResponseView,
   parseAcceptanceCustomId
 } from "../lib/services/taskAcceptanceService";
 import { formatDigestMessage } from "../lib/services/digestService";
@@ -44,6 +45,22 @@ describe("task acceptance Discord custom IDs", () => {
 
     expect(acceptedButton).toMatchObject({ disabled: true, custom_id: "task-owner:done:task123:user456" });
     expect(clarificationButton).toMatchObject({ disabled: true, custom_id: "task-owner:done:task123:user456" });
+  });
+
+  it("builds a fresh owner prompt after clarification is added", () => {
+    const acceptance = {
+      taskId: "task123",
+      userId: "user456",
+      task: { title: "Test task" },
+      user: { name: "Luke", discordUserId: "1336835474152620167" }
+    };
+
+    const view = buildClarificationResponseView(acceptance as any, "Here is the missing context.");
+
+    expect(view.content).toContain("<@1336835474152620167>");
+    expect(view.content).toContain("Can you accept ownership now?");
+    expect(view.components[0].components[0]).toMatchObject({ label: "Accept", custom_id: "task-owner:accept:task123:user456" });
+    expect(view.components[0].components[1]).toMatchObject({ label: "Needs clarification", custom_id: "task-owner:clarify:task123:user456" });
   });
 });
 

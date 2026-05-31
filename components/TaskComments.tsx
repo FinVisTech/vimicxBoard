@@ -11,20 +11,35 @@ type Comment = {
   user: { id: string; name: string } | null;
 };
 
-export function TaskComments({ taskId, initialComments }: { taskId: string; initialComments: Comment[] }) {
+type Acceptance = {
+  status: "PENDING" | "ACCEPTED" | "NEEDS_CLARIFICATION" | "REJECTED";
+};
+
+export function TaskComments({
+  taskId,
+  initialComments,
+  initialAcceptances = []
+}: {
+  taskId: string;
+  initialComments: Comment[];
+  initialAcceptances?: Acceptance[];
+}) {
   const [comments, setComments] = useState(initialComments);
+  const [acceptances, setAcceptances] = useState(initialAcceptances);
   const [draft, setDraft] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasClarificationRequest = acceptances.some((acceptance) => acceptance.status === "NEEDS_CLARIFICATION");
 
   useEffect(() => {
     const interval = window.setInterval(async () => {
       const response = await fetch(`/api/tasks/${taskId}`, { cache: "no-store" });
       if (!response.ok) return;
-      const task = (await response.json()) as { comments: Comment[] };
+      const task = (await response.json()) as { comments: Comment[]; acceptances: Acceptance[] };
       setComments(task.comments);
+      setAcceptances(task.acceptances);
     }, 5000);
 
     return () => window.clearInterval(interval);
@@ -50,6 +65,31 @@ export function TaskComments({ taskId, initialComments }: { taskId: string; init
 
     const comment = (await response.json()) as Comment;
     setComments((current) => [comment, ...current]);
+    setDraft("");
+  }
+
+  async function addClarification() {
+    const body = draft.trim();
+    if (!body || isSaving || !hasClarificationRequest) return;
+
+    setIsSaving(true);
+    setError(null);
+    const response = await fetch(`/api/tasks/${taskId}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body, source: "WEB", isClarification: true })
+    });
+    setIsSaving(false);
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      setError(payload?.error ?? "Clarification could not be saved.");
+      return;
+    }
+
+    const result = (await response.json()) as { comment: Comment; acceptances: Acceptance[] };
+    setComments((current) => [result.comment, ...current]);
+    setAcceptances(result.acceptances);
     setDraft("");
   }
 
@@ -96,16 +136,28 @@ export function TaskComments({ taskId, initialComments }: { taskId: string; init
           className="min-h-28 w-full resize-y rounded-md border border-border bg-white p-3 text-sm outline-none focus:border-primary"
           placeholder="Add a comment"
         />
-        <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-red-600">{error}</p>
-          <button
-            type="button"
-            onClick={addComment}
-            disabled={isSaving || draft.trim().length === 0}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Add Comment
-          </button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {hasClarificationRequest ? (
+              <button
+                type="button"
+                onClick={addClarification}
+                disabled={isSaving || draft.trim().length === 0}
+                className="rounded-md border border-primary bg-white px-4 py-2 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Add Clarification
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={addComment}
+              disabled={isSaving || draft.trim().length === 0}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Add Comment
+            </button>
+          </div>
         </div>
       </div>
 

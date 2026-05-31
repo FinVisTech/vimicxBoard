@@ -318,32 +318,15 @@ export function buildTaskAcceptancePanelView(
     .filter((discordUserId): discordUserId is string => Boolean(discordUserId))
     .map((discordUserId) => `<@${discordUserId}>`);
   const mentionLine = mentions.length > 0 ? `${mentions.join(" ")} you were assigned:` : "Owner acceptance:";
-  const statusLines = acceptances.map((acceptance) => `- ${acceptance.user.name}: ${formatAcceptanceStatus(acceptance.status)}`);
   const clarification = options?.clarification
     ? `\n\nClarification added:\n${truncateForDiscord(options.clarification, 500)}`
     : "";
 
-  const pendingOwners = acceptances.filter((acceptance) => acceptance.status === "PENDING");
   const rows = first ? [actionRow([openTaskButton(first.taskId)])] : [];
-  rows.push(...pendingOwners.slice(0, MAX_INTERACTIVE_OWNERS).map((acceptance) =>
-    actionRow([
-      {
-        type: 2,
-        style: 3,
-        label: `${acceptance.user.name} Accept`.slice(0, 80),
-        custom_id: `${CUSTOM_ID_PREFIX}:accept:${acceptance.taskId}:${acceptance.userId}`
-      },
-      {
-        type: 2,
-        style: 2,
-        label: `${acceptance.user.name} Needs clarification`.slice(0, 80),
-        custom_id: `${CUSTOM_ID_PREFIX}:clarify:${acceptance.taskId}:${acceptance.userId}`
-      }
-    ])
-  ));
+  rows.push(...acceptances.slice(0, MAX_INTERACTIVE_OWNERS).map((acceptance) => actionRow(ownerActionButtons(acceptance))));
 
   return {
-    content: `${mentionLine}${clarification}\n\nOwner status:\n${statusLines.join("\n")}\n\n**${taskTitle}**`,
+    content: `${mentionLine}\n\n**${taskTitle}**${clarification}`,
     components: rows
   };
 }
@@ -354,6 +337,41 @@ function actionRow(components: Array<Record<string, unknown>>): DiscordMessageVi
 
 function openTaskButton(taskId: string) {
   return { type: 2, style: 5, label: "Open task", url: getTaskUrl(taskId) };
+}
+
+function ownerActionButtons(acceptance: AcceptanceWithTaskUser) {
+  const isPending = acceptance.status === "PENDING";
+  const isAccepted = acceptance.status === "ACCEPTED";
+  const needsClarification = acceptance.status === "NEEDS_CLARIFICATION";
+
+  return [
+    disabledButton(`${acceptance.user.name}:`, 2, `label`, acceptance.taskId, acceptance.userId),
+    {
+      type: 2,
+      style: isAccepted ? 3 : 2,
+      label: "Accept",
+      custom_id: `${CUSTOM_ID_PREFIX}:accept:${acceptance.taskId}:${acceptance.userId}`,
+      disabled: !isPending
+    },
+    {
+      type: 2,
+      style: needsClarification ? 4 : 2,
+      label: "I need clarification",
+      custom_id: `${CUSTOM_ID_PREFIX}:clarify:${acceptance.taskId}:${acceptance.userId}`,
+      disabled: !isPending
+    },
+    disabledButton(formatAcceptanceStatus(acceptance.status), acceptanceStatusStyle(acceptance.status), "status", acceptance.taskId, acceptance.userId)
+  ];
+}
+
+function disabledButton(label: string, style: 2 | 3 | 4, purpose: string, taskId: string, userId: string) {
+  return {
+    type: 2,
+    style,
+    label: label.slice(0, 80),
+    custom_id: `${CUSTOM_ID_PREFIX}:${purpose}:${taskId}:${userId}`,
+    disabled: true
+  };
 }
 
 function getTaskUrl(taskId: string) {
@@ -369,7 +387,13 @@ function formatAcceptanceStatus(status: string) {
   if (status === "ACCEPTED") return "Accepted";
   if (status === "NEEDS_CLARIFICATION") return "Needs clarification";
   if (status === "REJECTED") return "Not accepted";
-  return "Awaiting acceptance";
+  return "Pending";
+}
+
+function acceptanceStatusStyle(status: string): 2 | 3 | 4 {
+  if (status === "ACCEPTED") return 3;
+  if (status === "NEEDS_CLARIFICATION" || status === "REJECTED") return 4;
+  return 2;
 }
 
 function truncateForDiscord(value: string, maxLength: number) {

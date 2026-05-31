@@ -56,12 +56,14 @@ describe("task acceptance Discord custom IDs", () => {
     });
 
     expect(view.content).toContain("<@1336835474152620167> <@222222222222222222> you were assigned:");
-    expect(view.content).toContain("- Luke: Awaiting acceptance");
-    expect(view.content).toContain("- Dalton: Awaiting acceptance");
-    expect(view.content.endsWith("**Test task**")).toBe(true);
+    expect(view.content).toContain("**Test task**");
     expect(view.components[0].components[0]).toMatchObject({ label: "Open task" });
-    expect(view.components[1].components[0]).toMatchObject({ label: "Luke Accept", custom_id: "task-owner:accept:task123:user456" });
-    expect(view.components[2].components[1]).toMatchObject({ label: "Dalton Needs clarification", custom_id: "task-owner:clarify:task123:user789" });
+    expect(view.components[1].components[0]).toMatchObject({ label: "Luke:", disabled: true });
+    expect(view.components[1].components[1]).toMatchObject({ label: "Accept", custom_id: "task-owner:accept:task123:user456" });
+    expect(view.components[1].components[2]).toMatchObject({ label: "I need clarification", custom_id: "task-owner:clarify:task123:user456" });
+    expect(view.components[1].components[3]).toMatchObject({ label: "Pending", disabled: true });
+    expect(view.components[2].components[0]).toMatchObject({ label: "Dalton:", disabled: true });
+    expect(view.components[2].components[2]).toMatchObject({ label: "I need clarification", custom_id: "task-owner:clarify:task123:user789" });
   });
 
   it("updates grouped panels with resolved owner status", () => {
@@ -77,8 +79,10 @@ describe("task acceptance Discord custom IDs", () => {
     const acceptedView = buildAcceptedAcceptanceView(accepted as any);
     const clarificationView = buildClarificationAcceptanceView(clarification as any);
 
-    expect(acceptedView.content).toContain("- Luke: Accepted");
-    expect(clarificationView.content).toContain("- Luke: Needs clarification");
+    expect(acceptedView.components[1].components[1]).toMatchObject({ label: "Accept", disabled: true, style: 3 });
+    expect(acceptedView.components[1].components[3]).toMatchObject({ label: "Accepted", disabled: true, style: 3 });
+    expect(clarificationView.components[1].components[2]).toMatchObject({ label: "I need clarification", disabled: true, style: 4 });
+    expect(clarificationView.components[1].components[3]).toMatchObject({ label: "Needs clarification", disabled: true, style: 4 });
   });
 
   it("builds a fresh owner prompt after clarification is added", () => {
@@ -97,8 +101,9 @@ describe("task acceptance Discord custom IDs", () => {
     expect(view.content).toContain("<@1336835474152620167>");
     expect(view.content).toContain("Clarification added:");
     expect(view.components[0].components[0]).toMatchObject({ label: "Open task" });
-    expect(view.components[1].components[0]).toMatchObject({ label: "Luke Accept", custom_id: "task-owner:accept:task123:user456" });
-    expect(view.components[1].components[1]).toMatchObject({ label: "Luke Needs clarification", custom_id: "task-owner:clarify:task123:user456" });
+    expect(view.components[1].components[0]).toMatchObject({ label: "Luke:" });
+    expect(view.components[1].components[1]).toMatchObject({ label: "Accept", custom_id: "task-owner:accept:task123:user456" });
+    expect(view.components[1].components[2]).toMatchObject({ label: "I need clarification", custom_id: "task-owner:clarify:task123:user456" });
   });
 });
 

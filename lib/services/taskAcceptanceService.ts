@@ -188,14 +188,14 @@ export async function requestTaskClarification(taskId: string, userId: string, d
       where: { id: verified.acceptance.id },
       data: { status: "NEEDS_CLARIFICATION", respondedAt: new Date() }
     }),
-    prisma.taskComment.create({
-      data: {
-        taskId,
-        userId,
-        source: "DISCORD",
-        body: `**Clarification requested by ${verified.acceptance.user.name}:**\n\n${cleanedBody}`
-      }
-    })
+      prisma.taskComment.create({
+        data: {
+          taskId,
+          userId,
+          source: "DISCORD",
+          body: `Clarification requested by ${verified.acceptance.user.name}:\n\n${cleanedBody}`
+        }
+      })
   ]);
 
   await prisma.taskAcceptance.update({
@@ -235,14 +235,14 @@ export async function editAcceptancePromptMessage(acceptance: AcceptanceWithTask
 export function buildAcceptedAcceptanceView(acceptance: AcceptanceWithTaskUser): DiscordMessageView {
   return {
     content: `Ownership accepted for **${formatDiscordTitle(acceptance.task.title)}** by ${acceptance.user.name}.`,
-    components: [actionRow([disabledButton("Accepted", 3), openTaskButton(acceptance.taskId)])]
+    components: [actionRow([disabledButton("Accepted", 3, acceptance.taskId, acceptance.userId), openTaskButton(acceptance.taskId)])]
   };
 }
 
 export function buildClarificationAcceptanceView(acceptance: AcceptanceWithTaskUser): DiscordMessageView {
   return {
     content: `${acceptance.user.name} asked for clarification on **${formatDiscordTitle(acceptance.task.title)}**. The request was added as a task comment.`,
-    components: [actionRow([disabledButton("Needs clarification", 2), openTaskButton(acceptance.taskId)])]
+    components: [actionRow([disabledButton("Needs clarification", 2, acceptance.taskId, acceptance.userId), openTaskButton(acceptance.taskId)])]
   };
 }
 
@@ -277,8 +277,14 @@ function actionRow(components: Array<Record<string, unknown>>): DiscordMessageVi
   return { type: 1, components };
 }
 
-function disabledButton(label: string, style: 2 | 3) {
-  return { type: 2, style, label, disabled: true };
+function disabledButton(label: string, style: 2 | 3, taskId: string, userId: string) {
+  return {
+    type: 2,
+    style,
+    label,
+    custom_id: `${CUSTOM_ID_PREFIX}:done:${taskId}:${userId}`,
+    disabled: true
+  };
 }
 
 function openTaskButton(taskId: string) {

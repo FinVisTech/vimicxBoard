@@ -317,7 +317,9 @@ export function buildTaskAcceptancePanelView(
     .map((acceptance) => acceptance.user.discordUserId)
     .filter((discordUserId): discordUserId is string => Boolean(discordUserId))
     .map((discordUserId) => `<@${discordUserId}>`);
-  const mentionLine = mentions.length > 0 ? `${mentions.join(" ")} you were assigned:` : "Owner acceptance:";
+  const mentionLine = mentions.length > 0
+    ? `An additional task has been added to the board. ${mentions.join(" ")} you are part of this deliverable:`
+    : "An additional task has been added to the board:";
   const clarification = options?.clarification
     ? `\n\nClarification added:\n${truncateForDiscord(options.clarification, 500)}`
     : "";
@@ -348,7 +350,7 @@ function ownerActionButtons(acceptance: AcceptanceWithTaskUser) {
     disabledButton(`${acceptance.user.name}:`, 2, `label`, acceptance.taskId, acceptance.userId),
     {
       type: 2,
-      style: isAccepted ? 3 : 2,
+      style: 3,
       label: "Accept",
       custom_id: `${CUSTOM_ID_PREFIX}:accept:${acceptance.taskId}:${acceptance.userId}`,
       disabled: !isPending
@@ -364,7 +366,7 @@ function ownerActionButtons(acceptance: AcceptanceWithTaskUser) {
   ];
 }
 
-function disabledButton(label: string, style: 2 | 3 | 4, purpose: string, taskId: string, userId: string) {
+function disabledButton(label: string, style: 1 | 2 | 3 | 4, purpose: string, taskId: string, userId: string) {
   return {
     type: 2,
     style,
@@ -385,15 +387,15 @@ function formatDiscordTitle(title: string) {
 
 function formatAcceptanceStatus(status: string) {
   if (status === "ACCEPTED") return "Accepted";
-  if (status === "NEEDS_CLARIFICATION") return "Needs clarification";
+  if (status === "NEEDS_CLARIFICATION") return "Clarification needed";
   if (status === "REJECTED") return "Not accepted";
   return "Pending";
 }
 
-function acceptanceStatusStyle(status: string): 2 | 3 | 4 {
+function acceptanceStatusStyle(status: string): 1 | 2 | 3 | 4 {
   if (status === "ACCEPTED") return 3;
   if (status === "NEEDS_CLARIFICATION" || status === "REJECTED") return 4;
-  return 2;
+  return 1;
 }
 
 function truncateForDiscord(value: string, maxLength: number) {

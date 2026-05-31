@@ -1,4 +1,5 @@
 import { formatDistanceToNow } from "date-fns";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import PendingTaskActions from "@/components/PendingTaskActions";
 
@@ -70,20 +71,25 @@ export default async function ReviewPage() {
                   <article key={task.id} className="px-5 py-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-xs font-semibold ${PRIORITY_COLORS[task.priority]}`}
-                          >
-                            {task.priority}
-                          </span>
-                          {task.assigneeName && (
-                            <span className="text-xs font-medium text-slate-500">→ {task.assigneeName}</span>
+                        <Link
+                          href={`/review/${task.id}`}
+                          className="block rounded-md transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary/25"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-xs font-semibold ${PRIORITY_COLORS[task.priority]}`}
+                            >
+                              {task.priority}
+                            </span>
+                            {task.assigneeName && (
+                              <span className="text-xs font-medium text-slate-500">-&gt; {task.assigneeName}</span>
+                            )}
+                          </div>
+                          <p className="mt-1 font-semibold text-slate-900">{task.title}</p>
+                          {task.description && (
+                            <p className="mt-1 text-sm leading-5 text-slate-600">{task.description}</p>
                           )}
-                        </div>
-                        <p className="mt-1 font-semibold text-slate-900">{task.title}</p>
-                        {task.description && (
-                          <p className="mt-1 text-sm leading-5 text-slate-600">{task.description}</p>
-                        )}
+                        </Link>
                         {task.contextNotes && (
                           <details className="mt-2">
                             <summary className="cursor-pointer text-xs font-semibold text-slate-400 hover:text-slate-600">

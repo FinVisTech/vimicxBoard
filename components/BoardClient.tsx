@@ -24,6 +24,7 @@ type Acceptance = {
   status: "PENDING" | "ACCEPTED" | "NEEDS_CLARIFICATION" | "REJECTED";
   user: { id: string; name: string; discordUserId?: string | null };
 };
+type User = { id: string; name: string };
 type Task = {
   id: string;
   title: string;
@@ -50,7 +51,7 @@ const priorityStyle = {
 const priorityRank: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 const byPriority = (a: Task, b: Task) => priorityRank[a.priority] - priorityRank[b.priority];
 
-export function BoardClient({ board, allUsers }: { board: Board; allUsers: { id: string; name: string }[] }) {
+export function BoardClient({ board, allUsers }: { board: Board; allUsers: User[] }) {
   const [columns, setColumns] = useState(board.columns);
   const [isHydrated, setIsHydrated] = useState(false);
   const [personFilter, setPersonFilter] = useState<string>("all");
@@ -168,7 +169,7 @@ function BoardHeader({
 }: {
   columns: Column[];
   onTaskCreated: (task: Task) => void;
-  allPeople: { id: string; name: string }[];
+  allPeople: User[];
   personFilter: string;
   onPersonFilterChange: (value: string) => void;
 }) {
@@ -235,7 +236,7 @@ function BoardHeader({
           </div>
         </div>
         <div className="flex w-full flex-col items-stretch gap-2 lg:w-[600px] lg:items-end">
-          <AddTaskPanel columns={columns} onTaskCreated={onTaskCreated} />
+          <AddTaskPanel columns={columns} allPeople={allPeople} onTaskCreated={onTaskCreated} />
           <p className="text-sm leading-6 text-slate-600">
             Mention <span className="font-semibold">@board</span> in Discord to add, move, assign, query, or summarize work.
           </p>
@@ -245,12 +246,12 @@ function BoardHeader({
   );
 }
 
-function AddTaskPanel({ columns, onTaskCreated }: { columns: Column[]; onTaskCreated: (task: Task) => void }) {
+function AddTaskPanel({ columns, allPeople, onTaskCreated }: { columns: Column[]; allPeople: User[]; onTaskCreated: (task: Task) => void }) {
   const defaultColumnName = columns.find((column) => column.name === "To Do")?.name ?? columns[0]?.name ?? "To Do";
   const [isOpen, setIsOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [assigneeName, setAssigneeName] = useState("");
+  const [assignees, setAssignees] = useState<User[]>([]);
   const [priority, setPriority] = useState<Priority>("MEDIUM");
   const [columnName, setColumnName] = useState(defaultColumnName);
   const [error, setError] = useState<string | null>(null);
@@ -272,7 +273,7 @@ function AddTaskPanel({ columns, onTaskCreated }: { columns: Column[]; onTaskCre
         body: JSON.stringify({
           title,
           description: description.trim() || null,
-          assigneeName: assigneeName.trim() || null,
+          assigneeIds: assignees.map((user) => user.id),
           priority,
           columnName,
           source: "WEB"
@@ -283,7 +284,7 @@ function AddTaskPanel({ columns, onTaskCreated }: { columns: Column[]; onTaskCre
       onTaskCreated(task);
       setTitle("");
       setDescription("");
-      setAssigneeName("");
+      setAssignees([]);
       setPriority("MEDIUM");
       setColumnName(defaultColumnName);
       setIsOpen(false);
@@ -329,10 +330,7 @@ function AddTaskPanel({ columns, onTaskCreated }: { columns: Column[]; onTaskCre
           <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Notes, acceptance criteria, links, or context" />
         </label>
         <div className="grid gap-3 sm:grid-cols-3">
-          <label className="grid gap-1 text-sm font-semibold text-slate-600">
-            Owner
-            <Input value={assigneeName} onChange={(event) => setAssigneeName(event.target.value)} placeholder="Luke, Dalton, etc." />
-          </label>
+          <AddTaskOwnerPicker assignees={assignees} users={allPeople} disabled={isSaving} onChange={setAssignees} />
           <label className="grid gap-1 text-sm font-semibold text-slate-600">
             Priority
             <select value={priority} onChange={(event) => setPriority(event.target.value as Priority)} className="h-10 rounded-md border border-border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-primary/25">
@@ -363,6 +361,160 @@ function AddTaskPanel({ columns, onTaskCreated }: { columns: Column[]; onTaskCre
         {error ? <p className="text-sm font-semibold text-red-700">{error}</p> : null}
       </div>
     </form>
+  );
+}
+
+function AddTaskOwnerPicker({
+  assignees,
+  users,
+  disabled,
+  onChange
+}: {
+  assignees: User[];
+  users: User[];
+  disabled: boolean;
+  onChange: (assignees: User[]) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState("");
+  const [highlighted, setHighlighted] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const assignedIds = new Set(assignees.map((user) => user.id));
+  const filtered = users.filter(
+    (user) => !assignedIds.has(user.id) && (query.trim().length === 0 || user.name.toLowerCase().includes(query.toLowerCase()))
+  );
+
+  useEffect(() => {
+    if (adding) {
+      setQuery("");
+      setHighlighted(0);
+      inputRef.current?.focus();
+    }
+  }, [adding]);
+
+  useEffect(() => {
+    function handleClick(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setAdding(false);
+      }
+    }
+
+    if (adding) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [adding]);
+
+  function addAssignee(user: User) {
+    setAdding(false);
+    onChange([...assignees, user]);
+  }
+
+  function removeAssignee(userId: string) {
+    onChange(assignees.filter((user) => user.id !== userId));
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setHighlighted((current) => Math.min(current + 1, filtered.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlighted((current) => Math.max(current - 1, 0));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (filtered[highlighted]) addAssignee(filtered[highlighted]);
+    } else if (event.key === "Escape") {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-1 text-sm font-semibold text-slate-600">
+      Owner
+      <div className="relative" ref={dropdownRef}>
+        <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-md border border-border bg-white px-2 py-1.5">
+          {assignees.length === 0 && !adding ? (
+            <span className="px-1 text-sm font-semibold text-slate-400">Unassigned</span>
+          ) : null}
+          {assignees.map((user) => (
+            <span
+              key={user.id}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700"
+            >
+              <UserRound className="h-3 w-3 text-slate-400" />
+              {user.name}
+              <button
+                type="button"
+                onClick={() => removeAssignee(user.id)}
+                disabled={disabled}
+                className="rounded-full p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-red-500 disabled:opacity-50"
+                aria-label={`Remove ${user.name}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {!adding ? (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              disabled={disabled || assignees.length === users.length}
+              className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2 py-1 text-xs font-semibold text-slate-400 transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+            >
+              <Plus className="h-3 w-3" />
+              Add
+            </button>
+          ) : null}
+        </div>
+
+        {adding ? (
+          <>
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setHighlighted(0);
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder="Search team members..."
+              disabled={disabled}
+              className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-60"
+            />
+            {filtered.length > 0 ? (
+              <ul className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border bg-white shadow-lg">
+                {filtered.map((user, index) => (
+                  <li key={user.id}>
+                    <button
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        addAssignee(user);
+                      }}
+                      onMouseEnter={() => setHighlighted(index)}
+                      className={`w-full px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
+                        index === highlighted ? "bg-primary text-white" : "text-slate-800 hover:bg-slate-50"
+                      }`}
+                    >
+                      {user.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-border bg-white px-4 py-3 shadow-lg">
+                <p className="text-sm text-slate-400">
+                  {assignees.length === users.length
+                    ? "All team members already assigned."
+                    : "No match - only team members in Settings can be assigned."}
+                </p>
+              </div>
+            )}
+          </>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

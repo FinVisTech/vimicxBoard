@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { resolveExistingUsersByNames } from "@/lib/services/pendingTaskAssignees";
 import { createTask, addTaskComment } from "@/lib/services/taskService";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -8,11 +9,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const pending = await prisma.pendingTask.findUnique({ where: { id } });
   if (!pending) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (pending.status !== "PENDING") return NextResponse.json({ error: "Already reviewed" }, { status: 409 });
+  const { users: assignees } = await resolveExistingUsersByNames(pending.assigneeName);
 
   const task = await createTask({
     title: pending.title,
     description: pending.description,
-    assigneeName: pending.assigneeName,
+    assigneeIds: assignees.map((user) => user.id),
     priority: pending.priority,
     columnName: "Backlog",
     source: "AGENT"

@@ -13,10 +13,13 @@ function formatDuration(seconds: number) {
 
 export default async function PendingTaskPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const pendingTask = await prisma.pendingTask.findUnique({
-    where: { id },
-    include: { meetingCall: true }
-  });
+  const [pendingTask, users] = await Promise.all([
+    prisma.pendingTask.findUnique({
+      where: { id },
+      include: { meetingCall: true }
+    }),
+    prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })
+  ]);
 
   if (!pendingTask) notFound();
   if (pendingTask.status === "APPROVED" && pendingTask.taskId) redirect(`/tasks/${pendingTask.taskId}`);
@@ -39,7 +42,7 @@ export default async function PendingTaskPage({ params }: { params: Promise<{ id
         </div>
       </div>
 
-      <PendingTaskEditor task={pendingTask} />
+      <PendingTaskEditor task={pendingTask} users={users} />
 
       <section className="mt-5 border-t border-border pt-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Meeting summary</p>

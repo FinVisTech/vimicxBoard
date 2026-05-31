@@ -1,14 +1,15 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, Save, Trash2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Plus, Save, Trash2, UserRound, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+type User = { id: string; name: string };
 
 type PendingTaskDraft = {
   id: string;
@@ -23,18 +24,30 @@ type DraftState = {
   title: string;
   description: string;
   contextNotes: string;
-  assigneeName: string;
+  assignees: User[];
   priority: Priority;
 };
 
 const priorityOptions: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 
-function toDraftState(task: PendingTaskDraft): DraftState {
+function splitAssigneeNames(value: string | null | undefined) {
+  return (value ?? "")
+    .split(",")
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function getInitialAssignees(task: PendingTaskDraft, users: User[]) {
+  const names = splitAssigneeNames(task.assigneeName);
+  return users.filter((user) => names.includes(user.name.toLowerCase()));
+}
+
+function toDraftState(task: PendingTaskDraft, users: User[]): DraftState {
   return {
     title: task.title,
     description: task.description ?? "",
     contextNotes: task.contextNotes ?? "",
-    assigneeName: task.assigneeName ?? "",
+    assignees: getInitialAssignees(task, users),
     priority: task.priority
   };
 }
@@ -44,15 +57,15 @@ function toPayload(draft: DraftState) {
     title: draft.title.trim(),
     description: draft.description.trim() || null,
     contextNotes: draft.contextNotes.trim() || null,
-    assigneeName: draft.assigneeName.trim() || null,
+    assigneeIds: draft.assignees.map((user) => user.id),
     priority: draft.priority
   };
 }
 
-export function PendingTaskEditor({ task }: { task: PendingTaskDraft }) {
+export function PendingTaskEditor({ task, users }: { task: PendingTaskDraft; users: User[] }) {
   const router = useRouter();
-  const [draft, setDraft] = useState<DraftState>(() => toDraftState(task));
-  const [savedDraft, setSavedDraft] = useState<DraftState>(() => toDraftState(task));
+  const [draft, setDraft] = useState<DraftState>(() => toDraftState(task, users));
+  const [savedDraft, setSavedDraft] = useState<DraftState>(() => toDraftState(task, users));
   const [state, setState] = useState<"idle" | "saving" | "approving" | "confirming" | "rejecting">("idle");
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -156,15 +169,12 @@ export function PendingTaskEditor({ task }: { task: PendingTaskDraft }) {
         </div>
 
         <div className="grid gap-3 lg:w-64">
-          <label className="grid gap-1 text-sm font-semibold text-slate-600">
-            Owner
-            <Input
-              value={draft.assigneeName}
-              onChange={(event) => setField("assigneeName", event.target.value)}
-              disabled={isBusy}
-              placeholder="Unassigned"
-            />
-          </label>
+          <PendingDraftOwnerPicker
+            assignees={draft.assignees}
+            users={users}
+            disabled={isBusy}
+            onChange={(nextAssignees) => setField("assignees", nextAssignees)}
+          />
           <label className="grid gap-1 text-sm font-semibold text-slate-600">
             Priority
             <select
@@ -237,5 +247,159 @@ export function PendingTaskEditor({ task }: { task: PendingTaskDraft }) {
         ) : null}
       </div>
     </form>
+  );
+}
+
+function PendingDraftOwnerPicker({
+  assignees,
+  users,
+  disabled,
+  onChange
+}: {
+  assignees: User[];
+  users: User[];
+  disabled: boolean;
+  onChange: (assignees: User[]) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState("");
+  const [highlighted, setHighlighted] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const assignedIds = new Set(assignees.map((user) => user.id));
+  const filtered = users.filter(
+    (user) => !assignedIds.has(user.id) && (query.trim().length === 0 || user.name.toLowerCase().includes(query.toLowerCase()))
+  );
+
+  useEffect(() => {
+    if (adding) {
+      setQuery("");
+      setHighlighted(0);
+      inputRef.current?.focus();
+    }
+  }, [adding]);
+
+  useEffect(() => {
+    function handleClick(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setAdding(false);
+      }
+    }
+
+    if (adding) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [adding]);
+
+  function addAssignee(user: User) {
+    setAdding(false);
+    onChange([...assignees, user]);
+  }
+
+  function removeAssignee(userId: string) {
+    onChange(assignees.filter((user) => user.id !== userId));
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setHighlighted((current) => Math.min(current + 1, filtered.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlighted((current) => Math.max(current - 1, 0));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (filtered[highlighted]) addAssignee(filtered[highlighted]);
+    } else if (event.key === "Escape") {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <div className="rounded-md bg-slate-50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Owners</p>
+
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {assignees.length === 0 && !adding ? (
+          <span className="text-sm font-semibold text-slate-400">Unassigned</span>
+        ) : null}
+        {assignees.map((user) => (
+          <span
+            key={user.id}
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"
+          >
+            <UserRound className="h-3 w-3 text-slate-400" />
+            {user.name}
+            <button
+              type="button"
+              onClick={() => removeAssignee(user.id)}
+              disabled={disabled}
+              className="ml-0.5 rounded-full p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-red-500 disabled:opacity-50"
+              aria-label={`Remove ${user.name}`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+
+        {!adding ? (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            disabled={disabled}
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-400 transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+          >
+            <Plus className="h-3 w-3" />
+            Add owner
+          </button>
+        ) : null}
+      </div>
+
+      {adding ? (
+        <div ref={dropdownRef} className="relative mt-2">
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setHighlighted(0);
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder="Search team members..."
+            disabled={disabled}
+            className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-60"
+          />
+          {filtered.length > 0 ? (
+            <ul className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border bg-white shadow-lg">
+              {filtered.map((user, index) => (
+                <li key={user.id}>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      addAssignee(user);
+                    }}
+                    onMouseEnter={() => setHighlighted(index)}
+                    className={`w-full px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
+                      index === highlighted ? "bg-primary text-white" : "text-slate-800 hover:bg-slate-50"
+                    }`}
+                  >
+                    {user.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-border bg-white px-4 py-3 shadow-lg">
+              <p className="text-sm text-slate-400">
+                {assignees.length === users.length
+                  ? "All team members already assigned."
+                  : "No match - only team members in Settings can be assigned."}
+              </p>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -20,6 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 type Assignee = { user: { id: string; name: string } };
+type Acceptance = {
+  status: "PENDING" | "ACCEPTED" | "NEEDS_CLARIFICATION" | "REJECTED";
+  user: { id: string; name: string; discordUserId?: string | null };
+};
 type Task = {
   id: string;
   title: string;
@@ -29,6 +33,7 @@ type Task = {
   source: "WEB" | "DISCORD" | "SLACK" | "AGENT";
   updatedAt: string;
   assignees: Assignee[];
+  acceptances: Acceptance[];
   columnId: string;
 };
 type Column = { id: string; name: string; position: number; tasks: Task[] };
@@ -455,6 +460,7 @@ function TaskCardBody({ task }: { task: Task }) {
           </span>
         ) : null}
       </div>
+      <AcceptanceBadges acceptances={task.acceptances} />
       <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
         <span className="inline-flex items-center gap-1">
           <SourceIcon className="h-3.5 w-3.5" />
@@ -463,5 +469,39 @@ function TaskCardBody({ task }: { task: Task }) {
         <span>{formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true })}</span>
       </div>
     </Link>
+  );
+}
+
+function AcceptanceBadges({ acceptances }: { acceptances: Acceptance[] }) {
+  if (!acceptances || acceptances.length === 0) return null;
+
+  const pending = acceptances.filter((acceptance) => acceptance.status === "PENDING");
+  const needsClarification = acceptances.filter((acceptance) => acceptance.status === "NEEDS_CLARIFICATION");
+  const rejected = acceptances.filter((acceptance) => acceptance.status === "REJECTED");
+  const allAccepted = acceptances.length > 0 && acceptances.every((acceptance) => acceptance.status === "ACCEPTED");
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-semibold">
+      {needsClarification.map((acceptance) => (
+        <span key={acceptance.user.id} className="rounded-full border border-red-200 bg-red-50 px-2 py-1 text-red-700">
+          Needs clarity: {acceptance.user.name}
+        </span>
+      ))}
+      {pending.map((acceptance) => (
+        <span key={acceptance.user.id} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-amber-700">
+          Awaiting {acceptance.user.name}
+        </span>
+      ))}
+      {rejected.map((acceptance) => (
+        <span key={acceptance.user.id} className="rounded-full border border-slate-300 bg-slate-100 px-2 py-1 text-slate-700">
+          Not accepted: {acceptance.user.name}
+        </span>
+      ))}
+      {allAccepted ? (
+        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700">
+          Owners accepted
+        </span>
+      ) : null}
+    </div>
   );
 }

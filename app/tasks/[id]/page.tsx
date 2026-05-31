@@ -16,6 +16,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
       where: { id },
       include: {
         assignees: { include: { user: true } },
+        acceptances: { include: { user: true }, orderBy: { requestedAt: "asc" } },
         column: true,
         comments: { include: { user: true }, orderBy: { createdAt: "desc" } }
       }
@@ -57,6 +58,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
             }
           />
         </div>
+        <AcceptancePanel acceptances={task.acceptances} />
         {task.description ? <p className="mt-6 leading-7 text-slate-700">{task.description}</p> : null}
         {task.isBlocked ? (
           <div className="mt-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -67,6 +69,58 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
       <TaskComments taskId={task.id} initialComments={JSON.parse(JSON.stringify(task.comments))} />
     </main>
   );
+}
+
+function AcceptancePanel({
+  acceptances
+}: {
+  acceptances: Array<{
+    id: string;
+    status: string;
+    requestedAt: Date;
+    respondedAt: Date | null;
+    user: { name: string; discordUserId: string | null };
+  }>;
+}) {
+  if (acceptances.length === 0) return null;
+
+  return (
+    <div className="mt-5 rounded-md bg-slate-50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Owner Acceptance</p>
+      <div className="mt-3 grid gap-2">
+        {acceptances.map((acceptance) => (
+          <div key={acceptance.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-sm">
+            <div>
+              <p className="font-semibold">{acceptance.user.name}</p>
+              <p className="text-xs text-slate-500">
+                {acceptance.user.discordUserId ? `Discord ID ${acceptance.user.discordUserId}` : "No Discord ID mapped"}
+              </p>
+            </div>
+            <div className="text-right">
+              <span className={`rounded-full px-2 py-1 text-xs font-semibold ${acceptanceStatusClass(acceptance.status)}`}>
+                {formatAcceptanceStatus(acceptance.status)}
+              </span>
+              <p className="mt-1 text-xs text-slate-500">
+                {acceptance.respondedAt ? acceptance.respondedAt.toLocaleString() : `Requested ${acceptance.requestedAt.toLocaleString()}`}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatAcceptanceStatus(status: string) {
+  if (status === "NEEDS_CLARIFICATION") return "Needs clarification";
+  return status.charAt(0) + status.slice(1).toLowerCase();
+}
+
+function acceptanceStatusClass(status: string) {
+  if (status === "ACCEPTED") return "bg-emerald-100 text-emerald-700";
+  if (status === "NEEDS_CLARIFICATION") return "bg-red-100 text-red-700";
+  if (status === "REJECTED") return "bg-slate-200 text-slate-700";
+  return "bg-amber-100 text-amber-700";
 }
 
 function Field({ label, value }: { label: string; value: string }) {

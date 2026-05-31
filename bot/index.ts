@@ -1,7 +1,24 @@
 import "dotenv/config";
-import { Client, Events, GatewayIntentBits, TextChannel } from "discord.js";
+import {
+  ActionRowBuilder,
+  Client,
+  Events,
+  GatewayIntentBits,
+  ModalBuilder,
+  TextChannel,
+  TextInputBuilder,
+  TextInputStyle
+} from "discord.js";
 import { handleDiscordBoardCommand } from "../lib/services/discordCommandService";
 import { pollNotesBotCalls } from "../lib/services/notesbotService";
+import {
+  acceptTaskOwnership,
+  buildClarificationModalCustomId,
+  editAcceptancePromptMessage,
+  parseAcceptanceCustomId,
+  requestTaskClarification,
+  verifyAcceptanceResponder
+} from "../lib/services/taskAcceptanceService";
 import { logger } from "../lib/logger";
 
 const token = process.env.DISCORD_BOT_TOKEN;
@@ -101,6 +118,70 @@ client.on(Events.MessageCreate, async (message) => {
   } catch (error) {
     console.error(error);
     await message.reply("Something went wrong on my end. Check the bot logs.");
+  }
+});
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!("customId" in interaction)) return;
+
+  const parsed = parseAcceptanceCustomId(interaction.customId);
+  if (!parsed) return;
+
+  try {
+    if (interaction.isButton()) {
+      if (parsed.action === "ACCEPT") {
+        const result = await acceptTaskOwnership(parsed.taskId, parsed.userId, interaction.user.id);
+        if (!result.ok) {
+          await interaction.reply({ content: result.message, ephemeral: true });
+          return;
+        }
+
+        await interaction.update(result.view as any);
+        return;
+      }
+
+      if (parsed.action === "CLARIFY") {
+        const verified = await verifyAcceptanceResponder(parsed.taskId, parsed.userId, interaction.user.id);
+        if (!verified.ok) {
+          await interaction.reply({ content: verified.message, ephemeral: true });
+          return;
+        }
+
+        const modal = new ModalBuilder()
+          .setCustomId(buildClarificationModalCustomId(parsed.taskId, parsed.userId))
+          .setTitle("Clarification request");
+        const clarificationInput = new TextInputBuilder()
+          .setCustomId("clarification")
+          .setLabel("What clarification do you need?")
+          .setStyle(TextInputStyle.Paragraph)
+          .setMaxLength(1000)
+          .setRequired(true);
+
+        modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(clarificationInput));
+        await interaction.showModal(modal);
+        return;
+      }
+    }
+
+    if (interaction.isModalSubmit() && parsed.action === "CLARIFY_MODAL") {
+      const body = interaction.fields.getTextInputValue("clarification");
+      const result = await requestTaskClarification(parsed.taskId, parsed.userId, interaction.user.id, body);
+      if (!result.ok) {
+        await interaction.reply({ content: result.message, ephemeral: true });
+        return;
+      }
+
+      await editAcceptancePromptMessage(result.acceptance, result.view);
+      await interaction.reply({
+        content: `Clarification added to the task. ${result.taskUrl}`,
+        ephemeral: true
+      });
+    }
+  } catch (error) {
+    console.error("[acceptance] interaction error:", error);
+    if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: "Something went wrong handling that ownership response.", ephemeral: true });
+    }
   }
 });
 

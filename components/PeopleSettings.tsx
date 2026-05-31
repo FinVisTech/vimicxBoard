@@ -17,6 +17,7 @@ export function PeopleSettings({ initialMembers }: { initialMembers: Member[] })
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const missingDiscordIds = initialMembers.filter((member) => !member.discordUserId);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -48,6 +49,12 @@ export function PeopleSettings({ initialMembers }: { initialMembers: Member[] })
 
   return (
     <div className="mt-4 grid gap-4">
+      {missingDiscordIds.length > 0 ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {missingDiscordIds.length} member{missingDiscordIds.length === 1 ? "" : "s"} can be assigned, but will not receive owner-acceptance pings until a Discord User ID is mapped.
+        </div>
+      ) : null}
+
       {/* Existing members */}
       <div className="grid gap-2">
         {initialMembers.length === 0 && (
@@ -57,7 +64,7 @@ export function PeopleSettings({ initialMembers }: { initialMembers: Member[] })
           <div key={m.id} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
             <div className="flex flex-col gap-0.5">
               <span className="font-semibold">{m.name}</span>
-              <span className="text-xs text-slate-500">
+              <span className={`text-xs ${m.discordUserId ? "text-slate-500" : "font-semibold text-amber-700"}`}>
                 {m.discordUserId ? `Discord ID: ${m.discordUserId}` : "No Discord ID"}
               </span>
             </div>

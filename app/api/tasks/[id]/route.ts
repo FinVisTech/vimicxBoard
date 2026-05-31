@@ -8,6 +8,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     where: { id },
     include: {
       assignees: { include: { user: true } },
+      acceptances: { include: { user: true }, orderBy: { requestedAt: "asc" } },
       createdBy: true,
       column: true,
       comments: { include: { user: true }, orderBy: { createdAt: "desc" } }

@@ -17,7 +17,7 @@ export default async function SettingsPage() {
           <h2 className="text-lg font-semibold">Discord</h2>
           <dl className="mt-4 grid gap-3 text-sm">
             <Row label="Guild ID" value={board.workspace.discordGuildId ?? "Set DISCORD_GUILD_ID"} />
-            <Row label="Digest Channel ID" value={board.workspace.discordChannelId ?? "Set DISCORD_CHANNEL_ID"} />
+            <Row label="Board Channel ID" value={board.workspace.discordChannelId ?? "Set DISCORD_CHANNEL_ID"} />
             <Row label="Mon/Fri Digest" value={`${board.workspace.dailyDigestTime} ${board.workspace.timezone}`} />
           </dl>
         </section>

@@ -1,6 +1,7 @@
 "use client";
 
 import { X, UserRound, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 type User = { id: string; name: string };
@@ -14,6 +15,7 @@ export function TaskOwnerField({
   initialAssignees: User[];
   users: User[];
 }) {
+  const router = useRouter();
   const [assignees, setAssignees] = useState<User[]>(initialAssignees);
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
@@ -63,7 +65,10 @@ export function TaskOwnerField({
     if (!res.ok) {
       setAssignees(prev);
       setError("Could not save.");
+      return;
     }
+
+    router.refresh();
   }
 
   function addAssignee(user: User) {

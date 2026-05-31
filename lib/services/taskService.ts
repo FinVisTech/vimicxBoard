@@ -1,6 +1,7 @@
 import { type Source } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultBoard } from "@/lib/services/bootstrap";
+import { syncTaskAcceptances } from "@/lib/services/taskAcceptanceService";
 import { createTaskSchema, updateTaskSchema } from "@/lib/validators/tasks";
 import type { ParsedBoardCommand } from "@/lib/validators/boardIntent";
 import { LOW_CONFIDENCE_THRESHOLD } from "@/lib/constants";
@@ -35,7 +36,11 @@ export async function createTask(input: unknown) {
     include: taskInclude
   });
 
-  return task;
+  if (assigneeIds.length > 0) {
+    await syncTaskAcceptances(task.id, assigneeIds);
+  }
+
+  return getTaskWithInclude(task.id);
 }
 
 export async function updateTask(taskId: string, input: unknown) {
@@ -80,6 +85,11 @@ export async function updateTask(taskId: string, input: unknown) {
     },
     include: taskInclude
   });
+
+  if (assigneesUpdate) {
+    await syncTaskAcceptances(task.id, task.assignees.map((assignee) => assignee.user.id));
+    return getTaskWithInclude(task.id);
+  }
 
   return task;
 }
@@ -163,6 +173,13 @@ export async function findTaskByTitleOrId(titleOrId: string) {
   });
 }
 
+async function getTaskWithInclude(taskId: string) {
+  return prisma.task.findUniqueOrThrow({
+    where: { id: taskId },
+    include: taskInclude
+  });
+}
+
 async function findColumn(boardId: string, name: string) {
   return prisma.boardColumn.findFirstOrThrow({
     where: { boardId, name: { equals: name, mode: "insensitive" } }
@@ -173,7 +190,10 @@ async function findOrCreateUsersByNames(nameInput: string): Promise<string[]> {
   const names = nameInput.split(",").map((n) => n.trim()).filter(Boolean);
   const ids = await Promise.all(
     names.map(async (name) => {
-      const user = await prisma.user.upsert({ where: { name }, update: {}, create: { name } });
+      const existing = await prisma.user.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
+      if (existing) return existing.id;
+
+      const user = await prisma.user.create({ data: { name } });
       return user.id;
     })
   );
@@ -191,6 +211,7 @@ async function findOrCreateDiscordUser(discordUserId: string) {
 
 const taskInclude = {
   assignees: { include: { user: true } },
+  acceptances: { include: { user: true }, orderBy: { requestedAt: "asc" as const } },
   createdBy: true,
   column: true,
   comments: { include: { user: true }, orderBy: { createdAt: "desc" as const } }

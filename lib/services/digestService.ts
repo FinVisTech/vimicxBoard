@@ -8,6 +8,10 @@ type DigestTask = {
   assignees: { user: { name: string } }[];
 };
 
+type AcceptanceDigestTask = DigestTask & {
+  acceptances: { status: "PENDING" | "ACCEPTED" | "NEEDS_CLARIFICATION" | "REJECTED"; user: { name: string } }[];
+};
+
 type DigestSections = {
   dueToday: DigestTask[];
   overdue: DigestTask[];
@@ -15,6 +19,8 @@ type DigestSections = {
   blocked: DigestTask[];
   completedYesterday: DigestTask[];
   unassigned: DigestTask[];
+  awaitingAcceptance: AcceptanceDigestTask[];
+  needsClarification: AcceptanceDigestTask[];
 };
 
 export async function buildDailyDigest() {
@@ -24,7 +30,7 @@ export async function buildDailyDigest() {
   const yesterdayStart = startOfDay(subDays(new Date(), 1));
   const yesterdayEnd = endOfDay(subDays(new Date(), 1));
 
-  const [dueToday, overdue, inProgress, blocked, completedYesterday, unassigned] = await Promise.all([
+  const [dueToday, overdue, inProgress, blocked, completedYesterday, unassigned, awaitingAcceptance, needsClarification] = await Promise.all([
     prisma.task.findMany({
       where: { boardId: board.id, archivedAt: null, dueDate: { gte: todayStart, lte: todayEnd }, completedAt: null },
       include: { assignees: { include: { user: true } } }
@@ -48,6 +54,14 @@ export async function buildDailyDigest() {
     prisma.task.findMany({
       where: { boardId: board.id, archivedAt: null, assignees: { none: {} }, completedAt: null },
       include: { assignees: { include: { user: true } } }
+    }),
+    prisma.task.findMany({
+      where: { boardId: board.id, archivedAt: null, completedAt: null, acceptances: { some: { status: "PENDING" } } },
+      include: { assignees: { include: { user: true } }, acceptances: { include: { user: true } } }
+    }),
+    prisma.task.findMany({
+      where: { boardId: board.id, archivedAt: null, completedAt: null, acceptances: { some: { status: "NEEDS_CLARIFICATION" } } },
+      include: { assignees: { include: { user: true } }, acceptances: { include: { user: true } } }
     })
   ]);
 
@@ -60,9 +74,11 @@ export async function buildDailyDigest() {
       inProgress,
       blocked,
       completedYesterday,
-      unassigned
+      unassigned,
+      awaitingAcceptance,
+      needsClarification
     },
-    message: formatDigestMessage({ dueToday, overdue, inProgress, blocked, completedYesterday, unassigned })
+    message: formatDigestMessage({ dueToday, overdue, inProgress, blocked, completedYesterday, unassigned, awaitingAcceptance, needsClarification })
   };
 }
 
@@ -75,7 +91,9 @@ export function formatDigestMessage(input: DigestSections): string {
     section("In Progress", input.inProgress),
     section("Blocked", input.blocked, true),
     section("Completed Yesterday", input.completedYesterday),
-    section("Unassigned", input.unassigned)
+    section("Unassigned", input.unassigned),
+    acceptanceSection("Awaiting Owner Acceptance", input.awaitingAcceptance, "PENDING"),
+    acceptanceSection("Needs Clarification", input.needsClarification, "NEEDS_CLARIFICATION")
   ].join("\n");
 }
 
@@ -125,5 +143,21 @@ function section(title: string, tasks: Array<{ title: string; blockerReason?: st
     const reason = includeReason && task.blockerReason ? ` - ${task.blockerReason}` : "";
     return `- ${owner}${task.title}${reason}`;
   });
+  return `**${title}:**\n${lines.join("\n")}`;
+}
+
+function acceptanceSection(title: string, tasks: AcceptanceDigestTask[], status: AcceptanceDigestTask["acceptances"][number]["status"]) {
+  if (tasks.length === 0) {
+    return `**${title}:**\n- None`;
+  }
+
+  const lines = tasks.map((task) => {
+    const names = task.acceptances
+      .filter((acceptance) => acceptance.status === status)
+      .map((acceptance) => acceptance.user.name)
+      .join(", ");
+    return `- ${names || "Owner"}: ${task.title}`;
+  });
+
   return `**${title}:**\n${lines.join("\n")}`;
 }

@@ -196,10 +196,12 @@ function parseCreate(text: string, context: CommandContext, now: Date, confidenc
   const due = parseNaturalDueDate(titleSource, now);
   const title = cleanTaskTitle(titleSource);
   const priority = /\burgent|asap|critical\b/i.test(text) ? "URGENT" : /\bhigh priority\b/i.test(text) ? "HIGH" : "MEDIUM";
+  const structuredCreate = Boolean(forMatch || needsMatch);
+  const finalConfidence = structuredCreate ? Math.max(confidence, 0.94) : confidence;
 
   return {
     intent: "CREATE_TASK",
-    confidence: title.length > 3 ? confidence : 0.55,
+    confidence: title.length > 3 ? finalConfidence : 0.55,
     task: {
       ...emptyTask,
       title,

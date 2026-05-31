@@ -312,13 +312,14 @@ export function buildTaskAcceptancePanelView(
 ): DiscordMessageView {
   const first = acceptances[0];
   const taskTitle = first ? formatDiscordTitle(first.task.title) : "Task";
-  const mentions = acceptances
-    .filter((acceptance) => options?.mentionUserIds?.has(acceptance.userId))
+  const visibleMentions = acceptances
     .map((acceptance) => acceptance.user.discordUserId)
     .filter((discordUserId): discordUserId is string => Boolean(discordUserId))
     .map((discordUserId) => `<@${discordUserId}>`);
-  const mentionLine = mentions.length > 0
-    ? `An additional task has been added to the board. ${mentions.join(" ")} you are part of this deliverable:`
+  const fallbackNames = acceptances.map((acceptance) => acceptance.user.name).filter(Boolean);
+  const people = visibleMentions.length > 0 ? visibleMentions.join(" ") : fallbackNames.join(", ");
+  const mentionLine = people
+    ? `${people} a task has been added to the board. You are part of this deliverable:`
     : "An additional task has been added to the board:";
   const clarification = options?.clarification
     ? `\n\nClarification added:\n${truncateForDiscord(options.clarification, 500)}`

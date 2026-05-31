@@ -55,8 +55,8 @@ describe("task acceptance Discord custom IDs", () => {
       mentionUserIds: new Set(["user456", "user789"])
     });
 
-    expect(view.content).toContain("An additional task has been added to the board.");
-    expect(view.content).toContain("<@1336835474152620167> <@222222222222222222> you are part of this deliverable:");
+    expect(view.content).toContain("<@1336835474152620167> <@222222222222222222> a task has been added to the board.");
+    expect(view.content).toContain("You are part of this deliverable:");
     expect(view.content).toContain("**Test task**");
     expect(view.components[0].components[0]).toMatchObject({ label: "Open task" });
     expect(view.components[1].components[0]).toMatchObject({ label: "Luke:", disabled: true });

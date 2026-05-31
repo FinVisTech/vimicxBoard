@@ -324,7 +324,8 @@ export function buildTaskAcceptancePanelView(
     : "";
 
   const pendingOwners = acceptances.filter((acceptance) => acceptance.status === "PENDING");
-  const rows = pendingOwners.slice(0, MAX_INTERACTIVE_OWNERS).map((acceptance) =>
+  const rows = first ? [actionRow([openTaskButton(first.taskId)])] : [];
+  rows.push(...pendingOwners.slice(0, MAX_INTERACTIVE_OWNERS).map((acceptance) =>
     actionRow([
       {
         type: 2,
@@ -339,14 +340,10 @@ export function buildTaskAcceptancePanelView(
         custom_id: `${CUSTOM_ID_PREFIX}:clarify:${acceptance.taskId}:${acceptance.userId}`
       }
     ])
-  );
-
-  if (first && rows.length < 5) {
-    rows.push(actionRow([openTaskButton(first.taskId)]));
-  }
+  ));
 
   return {
-    content: `${mentionLine}\n\n**${taskTitle}**${clarification}\n\nOwner status:\n${statusLines.join("\n")}`,
+    content: `${mentionLine}${clarification}\n\nOwner status:\n${statusLines.join("\n")}\n\n**${taskTitle}**`,
     components: rows
   };
 }

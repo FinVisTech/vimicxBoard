@@ -381,8 +381,8 @@ function AddTaskPanel({ columns, allPeople, onTaskCreated }: { columns: Column[]
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={isSaving} className="h-12 gap-2 px-6 text-base">
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={isSaving} className="h-10 gap-2 px-5 text-sm">
           <Save className="h-5 w-5" />
           Create Task
         </Button>

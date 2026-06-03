@@ -56,14 +56,14 @@ export function TaskDueDatePicker({
   const isOverdue = dueDate && dueDate < new Date() && !isSaving;
 
   return (
-    <div className="flex flex-col items-start gap-2 sm:items-end">
+    <div className="flex w-full flex-col items-stretch gap-2">
       <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Due Date</span>
 
       <div ref={ref} className="relative">
         <button
           onClick={() => setOpen((o) => !o)}
           disabled={isSaving}
-          className={`rounded-full border px-3 py-1 text-sm font-semibold outline-none transition-colors disabled:opacity-50 ${
+          className={`h-10 w-full rounded-md border px-3 text-sm font-semibold outline-none transition-colors disabled:opacity-50 ${
             dueDate
               ? isOverdue
                 ? "border-red-200 bg-red-100 text-red-700 hover:bg-red-200"
@@ -71,7 +71,7 @@ export function TaskDueDatePicker({
               : "border-slate-200 bg-slate-100 text-slate-500 hover:bg-slate-200"
           }`}
         >
-          {isSaving ? "Saving…" : label}
+          {isSaving ? "Saving..." : label}
         </button>
 
         {open && (

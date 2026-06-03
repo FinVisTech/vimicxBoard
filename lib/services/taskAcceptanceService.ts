@@ -391,10 +391,12 @@ function openTaskButton(taskId: string) {
 }
 
 function taskStatusButton(task: AcceptanceWithTaskUser["task"]) {
+  const presentation = getTaskBoardStatusPresentation(task);
+
   return {
     type: 2,
-    style: task.completedAt || task.column.name === "Done" ? 3 : 2,
-    label: `Status: ${formatTaskBoardStatus(task)}`.slice(0, 80),
+    style: presentation.style,
+    label: `${presentation.marker} Status: ${presentation.label}`.slice(0, 80),
     custom_id: `${CUSTOM_ID_PREFIX}:status:${task.id}`,
     disabled: true
   };
@@ -452,8 +454,24 @@ function formatAcceptanceStatus(status: string) {
 }
 
 function formatTaskBoardStatus(task: AcceptanceWithTaskUser["task"]) {
-  if (task.completedAt || task.column.name === "Done") return "Completed";
-  return task.column.name;
+  return getTaskBoardStatusPresentation(task).label;
+}
+
+function getTaskBoardStatusPresentation(task: AcceptanceWithTaskUser["task"]): {
+  label: string;
+  marker: string;
+  style: 1 | 2 | 3 | 4;
+} {
+  const columnName = task.column.name;
+  const normalized = columnName.trim().toLowerCase();
+
+  if (task.completedAt || normalized === "done") return { label: "Completed", marker: "🟢", style: 3 };
+  if (normalized === "in progress") return { label: columnName, marker: "🔵", style: 1 };
+  if (normalized === "blocked") return { label: columnName, marker: "🔴", style: 4 };
+  if (normalized === "to do" || normalized === "todo") return { label: columnName, marker: "🟠", style: 2 };
+  if (normalized === "backlog") return { label: columnName, marker: "⚫", style: 2 };
+
+  return { label: columnName, marker: "⚪", style: 2 };
 }
 
 function acceptanceStatusStyle(status: string): 1 | 2 | 3 | 4 {

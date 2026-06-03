@@ -21,12 +21,15 @@ type DiscordMessageView = {
 export type AcceptanceCustomId =
   | { action: "ACCEPT"; taskId: string; userId: string }
   | { action: "CLARIFY"; taskId: string; userId: string }
-  | { action: "CLARIFY_MODAL"; taskId: string; userId: string };
+  | { action: "CLARIFY_MODAL"; taskId: string; userId: string }
+  | { action: "STATUS"; taskId: string };
 
 export function parseAcceptanceCustomId(customId: string): AcceptanceCustomId | null {
   const [prefix, action, taskId, userId] = customId.split(":");
-  if (prefix !== CUSTOM_ID_PREFIX || !action || !taskId || !userId) return null;
+  if (prefix !== CUSTOM_ID_PREFIX || !action || !taskId) return null;
 
+  if (action === "status") return { action: "STATUS", taskId };
+  if (!userId) return null;
   if (action === "accept") return { action: "ACCEPT", taskId, userId };
   if (action === "clarify") return { action: "CLARIFY", taskId, userId };
   if (action === "clarify-modal") return { action: "CLARIFY_MODAL", taskId, userId };
@@ -397,8 +400,7 @@ function taskStatusButton(task: AcceptanceWithTaskUser["task"]) {
     type: 2,
     style: presentation.style,
     label: `${presentation.marker} Status: ${presentation.label}`.slice(0, 80),
-    custom_id: `${CUSTOM_ID_PREFIX}:status:${task.id}`,
-    disabled: true
+    custom_id: `${CUSTOM_ID_PREFIX}:status:${task.id}`
   };
 }
 
@@ -466,8 +468,8 @@ function getTaskBoardStatusPresentation(task: AcceptanceWithTaskUser["task"]): {
   const normalized = columnName.trim().toLowerCase();
 
   if (task.completedAt || normalized === "done") return { label: "Completed", marker: "🟢", style: 3 };
-  if (normalized === "in progress") return { label: columnName, marker: "🔵", style: 1 };
   if (normalized === "blocked") return { label: columnName, marker: "🔴", style: 4 };
+  if (normalized === "in progress") return { label: columnName, marker: "🔵", style: 2 };
   if (normalized === "to do" || normalized === "todo") return { label: columnName, marker: "🟠", style: 2 };
   if (normalized === "backlog") return { label: columnName, marker: "⚫", style: 2 };
 

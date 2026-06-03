@@ -11,7 +11,7 @@ import {
   useSensors
 } from "@dnd-kit/core";
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, Bot, CheckCircle2, ChevronDown, Clock, MessageSquare, Plus, Radio, Save, UserRound, X } from "lucide-react";
+import { AlertTriangle, Bot, Check, CheckCircle2, ChevronDown, Clock, Mail, MessageSquare, Pencil, Plus, Radio, Save, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -24,7 +24,7 @@ type Acceptance = {
   status: "PENDING" | "ACCEPTED" | "NEEDS_CLARIFICATION" | "REJECTED";
   user: { id: string; name: string; discordUserId?: string | null };
 };
-type User = { id: string; name: string };
+type User = { id: string; name: string; discordUserId?: string | null };
 type Task = {
   id: string;
   title: string;
@@ -139,7 +139,7 @@ export function BoardClient({ board, allUsers }: { board: Board; allUsers: User[
     return (
       <>
         <BoardHeader columns={columns} onTaskCreated={addTaskToColumn} allPeople={allPeople} personFilter={personFilter} onPersonFilterChange={setPersonFilter} />
-        <BoardGrid columns={filteredColumns} isInteractive={false} />
+        <BoardGrid columns={filteredColumns} isInteractive={false} onTaskUpdated={updateTaskInColumns} />
       </>
     );
   }
@@ -148,7 +148,7 @@ export function BoardClient({ board, allUsers }: { board: Board; allUsers: User[
     <>
       <BoardHeader columns={columns} onTaskCreated={addTaskToColumn} allPeople={allPeople} personFilter={personFilter} onPersonFilterChange={setPersonFilter} />
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
-        <BoardGrid columns={filteredColumns} isInteractive />
+        <BoardGrid columns={filteredColumns} isInteractive onTaskUpdated={updateTaskInColumns} />
       </DndContext>
     </>
   );
@@ -156,6 +156,23 @@ export function BoardClient({ board, allUsers }: { board: Board; allUsers: User[
   function addTaskToColumn(task: Task) {
     setColumns((current) =>
       current.map((column) => (column.id === task.columnId ? { ...column, tasks: [task, ...column.tasks] } : column))
+    );
+  }
+
+  function updateTaskInColumns(updatedTask: Task) {
+    setColumns((current) =>
+      current.map((column) => ({
+        ...column,
+        tasks: column.tasks.map((task) =>
+          task.id === updatedTask.id
+            ? {
+                ...task,
+                ...updatedTask,
+                columnId: updatedTask.columnId ?? task.columnId
+              }
+            : task
+        )
+      }))
     );
   }
 }
@@ -252,10 +269,16 @@ function AddTaskPanel({ columns, allPeople, onTaskCreated }: { columns: Column[]
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignees, setAssignees] = useState<User[]>([]);
+  const [dmAssignees, setDmAssignees] = useState<User[]>([]);
   const [priority, setPriority] = useState<Priority>("MEDIUM");
   const [columnName, setColumnName] = useState(defaultColumnName);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const ownerIds = new Set(assignees.map((user) => user.id));
+    setDmAssignees((current) => current.filter((user) => ownerIds.has(user.id)));
+  }, [assignees]);
 
   async function submitTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -274,6 +297,7 @@ function AddTaskPanel({ columns, allPeople, onTaskCreated }: { columns: Column[]
           title,
           description: description.trim() || null,
           assigneeIds: assignees.map((user) => user.id),
+          dmUserIds: dmAssignees.map((user) => user.id),
           priority,
           columnName,
           source: "WEB"
@@ -285,6 +309,7 @@ function AddTaskPanel({ columns, allPeople, onTaskCreated }: { columns: Column[]
       setTitle("");
       setDescription("");
       setAssignees([]);
+      setDmAssignees([]);
       setPriority("MEDIUM");
       setColumnName(defaultColumnName);
       setIsOpen(false);
@@ -351,6 +376,7 @@ function AddTaskPanel({ columns, allPeople, onTaskCreated }: { columns: Column[]
             </select>
           </label>
         </div>
+        <AddTaskDmPicker dmAssignees={dmAssignees} owners={assignees} disabled={isSaving} onChange={setDmAssignees} />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -361,6 +387,62 @@ function AddTaskPanel({ columns, allPeople, onTaskCreated }: { columns: Column[]
         {error ? <p className="text-sm font-semibold text-red-700">{error}</p> : null}
       </div>
     </form>
+  );
+}
+
+function AddTaskDmPicker({
+  dmAssignees,
+  owners,
+  disabled,
+  onChange
+}: {
+  dmAssignees: User[];
+  owners: User[];
+  disabled: boolean;
+  onChange: (assignees: User[]) => void;
+}) {
+  const selectedIds = new Set(dmAssignees.map((user) => user.id));
+
+  function toggleOwner(user: User) {
+    if (!user.discordUserId || disabled) return;
+    if (selectedIds.has(user.id)) {
+      onChange(dmAssignees.filter((assignee) => assignee.id !== user.id));
+      return;
+    }
+    onChange([...dmAssignees, user]);
+  }
+
+  return (
+    <div className="grid gap-1 text-sm font-semibold text-slate-600">
+      DM owners
+      <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-md border border-border bg-white px-2 py-1.5">
+        {owners.length === 0 ? (
+          <span className="px-1 text-sm font-semibold text-slate-400">Add owners first</span>
+        ) : null}
+        {owners.map((user) => {
+          const selected = selectedIds.has(user.id);
+          const canDm = Boolean(user.discordUserId);
+          return (
+            <button
+              key={user.id}
+              type="button"
+              onClick={() => toggleOwner(user)}
+              disabled={disabled || !canDm}
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                selected
+                  ? "border-primary bg-teal-50 text-primary"
+                  : "border-border bg-slate-50 text-slate-600 hover:border-primary hover:text-primary"
+              }`}
+              title={canDm ? undefined : "No Discord user ID mapped"}
+            >
+              <Mail className="h-3 w-3" />
+              {user.name}
+              {selected ? <Check className="h-3 w-3" /> : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -518,17 +600,25 @@ function AddTaskOwnerPicker({
   );
 }
 
-function BoardGrid({ columns, isInteractive }: { columns: Column[]; isInteractive: boolean }) {
+function BoardGrid({
+  columns,
+  isInteractive,
+  onTaskUpdated
+}: {
+  columns: Column[];
+  isInteractive: boolean;
+  onTaskUpdated: (task: Task) => void;
+}) {
   return (
     <div className="grid min-h-[calc(100vh-145px)] grid-cols-1 gap-4 overflow-x-auto pb-6 md:grid-cols-5">
       {columns.map((column) => (
-        isInteractive ? <ColumnDrop key={column.id} column={column} /> : <StaticColumn key={column.id} column={column} />
+        isInteractive ? <ColumnDrop key={column.id} column={column} onTaskUpdated={onTaskUpdated} /> : <StaticColumn key={column.id} column={column} />
       ))}
     </div>
   );
 }
 
-function ColumnDrop({ column }: { column: Column }) {
+function ColumnDrop({ column, onTaskUpdated }: { column: Column; onTaskUpdated: (task: Task) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   return (
@@ -536,7 +626,7 @@ function ColumnDrop({ column }: { column: Column }) {
       <ColumnHeader column={column} />
       <div className="min-h-24 space-y-3" data-droppable-id={column.id}>
         {[...column.tasks].sort(byPriority).map((task) => (
-          <TaskCard key={task.id} task={task} />
+          <TaskCard key={task.id} task={task} onTaskUpdated={onTaskUpdated} />
         ))}
       </div>
     </section>
@@ -571,13 +661,13 @@ function getColumnClassName(isOver: boolean) {
     : "rounded-lg border border-border bg-slate-50 p-3 transition-colors";
 }
 
-function TaskCard({ task }: { task: Task }) {
+function TaskCard({ task, onTaskUpdated }: { task: Task; onTaskUpdated: (task: Task) => void }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: task.id });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
 
   return (
     <article ref={setNodeRef} style={style} {...listeners} {...attributes} className="cursor-grab rounded-lg border border-border bg-card p-4 shadow-sm">
-      <TaskCardBody task={task} />
+      <TaskCardBody task={task} onTaskUpdated={onTaskUpdated} />
     </article>
   );
 }
@@ -590,37 +680,170 @@ function StaticTaskCard({ task }: { task: Task }) {
   );
 }
 
-function TaskCardBody({ task }: { task: Task }) {
+function TaskCardBody({ task, onTaskUpdated }: { task: Task; onTaskUpdated?: (task: Task) => void }) {
   const SourceIcon = task.source === "DISCORD" ? MessageSquare : task.source === "AGENT" ? Bot : task.source === "SLACK" ? Radio : CheckCircle2;
 
   return (
-    <Link href={`/tasks/${task.id}`} className="block">
+    <div>
       <div className="mb-3 flex items-start justify-between gap-3">
-        <h3 className="text-base font-semibold leading-snug">{task.title}</h3>
+        {onTaskUpdated ? (
+          <EditableTaskTitle task={task} onTaskUpdated={onTaskUpdated} />
+        ) : (
+          <Link href={`/tasks/${task.id}`} className="min-w-0 flex-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-primary/25">
+            <h3 className="text-base font-semibold leading-snug">{task.title}</h3>
+          </Link>
+        )}
         {task.isBlocked ? <AlertTriangle className="h-5 w-5 shrink-0 text-danger" /> : null}
       </div>
-      <div className="flex flex-wrap gap-2 text-xs font-semibold">
-        <span className={priorityStyle[task.priority] + " rounded-full px-2 py-1"}>{task.priority}</span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-slate-600">
-          <UserRound className="h-3.5 w-3.5" />
-          {task.assignees.length > 0 ? task.assignees.map((a) => a.user.name).join(", ") : "Unassigned"}
-        </span>
-        {task.dueDate ? (
+      <Link href={`/tasks/${task.id}`} className="block rounded-sm focus:outline-none focus:ring-2 focus:ring-primary/25">
+        <div className="flex flex-wrap gap-2 text-xs font-semibold">
+          <span className={priorityStyle[task.priority] + " rounded-full px-2 py-1"}>{task.priority}</span>
           <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-slate-600">
-            <Clock className="h-3.5 w-3.5" />
-            {new Date(task.dueDate).toLocaleDateString()}
+            <UserRound className="h-3.5 w-3.5" />
+            {task.assignees.length > 0 ? task.assignees.map((a) => a.user.name).join(", ") : "Unassigned"}
           </span>
-        ) : null}
-      </div>
-      <AcceptanceBadges acceptances={task.acceptances} />
-      <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
-        <span className="inline-flex items-center gap-1">
-          <SourceIcon className="h-3.5 w-3.5" />
-          {task.source}
-        </span>
-        <span>{formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true })}</span>
-      </div>
-    </Link>
+          {task.dueDate ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-slate-600">
+              <Clock className="h-3.5 w-3.5" />
+              {new Date(task.dueDate).toLocaleDateString()}
+            </span>
+          ) : null}
+        </div>
+        <AcceptanceBadges acceptances={task.acceptances} />
+        <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1">
+            <SourceIcon className="h-3.5 w-3.5" />
+            {task.source}
+          </span>
+          <span>{formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true })}</span>
+        </div>
+      </Link>
+    </div>
+  );
+}
+
+function EditableTaskTitle({ task, onTaskUpdated }: { task: Task; onTaskUpdated: (task: Task) => void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(task.title);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isEditing) setDraft(task.title);
+  }, [isEditing, task.title]);
+
+  useEffect(() => {
+    if (isEditing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  async function saveTitle() {
+    const nextTitle = draft.trim();
+    if (nextTitle === task.title) {
+      setIsEditing(false);
+      setError(null);
+      return;
+    }
+
+    if (nextTitle.length < 2) {
+      setError("Use at least 2 characters.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+
+    const response = await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: nextTitle, source: "WEB" })
+    });
+
+    setIsSaving(false);
+    if (!response.ok) {
+      setError("Could not save.");
+      return;
+    }
+
+    const updatedTask = (await response.json()) as Task;
+    onTaskUpdated(updatedTask);
+    setIsEditing(false);
+  }
+
+  function cancelEdit() {
+    setDraft(task.title);
+    setIsEditing(false);
+    setError(null);
+  }
+
+  if (isEditing) {
+    return (
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void saveTitle();
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+        className="min-w-0 flex-1"
+      >
+        <div className="flex items-start gap-1.5">
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") cancelEdit();
+            }}
+            disabled={isSaving}
+            className="min-h-9 min-w-0 flex-1 rounded-md border border-border bg-white px-2.5 py-1.5 text-base font-semibold leading-snug outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-primary transition hover:bg-teal-50 disabled:opacity-50"
+            aria-label="Save task title"
+          >
+            <Check className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={cancelEdit}
+            disabled={isSaving}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+            aria-label="Cancel title edit"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        {error ? <p className="mt-1 text-xs font-semibold text-red-600">{error}</p> : null}
+      </form>
+    );
+  }
+
+  return (
+    <div className="group/title flex min-w-0 flex-1 items-start gap-1.5">
+      <Link href={`/tasks/${task.id}`} className="min-w-0 flex-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-primary/25">
+        <h3 className="text-base font-semibold leading-snug">{task.title}</h3>
+      </Link>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setIsEditing(true);
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-400 opacity-100 transition hover:bg-slate-100 hover:text-slate-700 sm:opacity-0 sm:group-hover/title:opacity-100 sm:focus:opacity-100"
+        aria-label="Edit task title"
+        title="Edit title"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 }
 

@@ -73,6 +73,51 @@ export async function sendAcceptancePrompt(acceptance: AcceptanceWithTaskUser) {
   await sendTaskAcceptancePrompt(acceptance.taskId, [acceptance.userId]);
 }
 
+export async function sendTaskAssignmentDms(taskId: string, userIds: string[]) {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  const selectedUserIds = [...new Set(userIds.filter(Boolean))];
+  if (!token || selectedUserIds.length === 0) return;
+
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: { assignees: { include: { user: true } }, column: true }
+  });
+  if (!task) return;
+
+  const ownerIds = new Set(task.assignees.map((assignee) => assignee.userId));
+  const nonOwnerIds = selectedUserIds.filter((userId) => !ownerIds.has(userId));
+  if (nonOwnerIds.length > 0) {
+    throw new Error("DM recipients must already be task owners.");
+  }
+
+  await Promise.all(
+    task.assignees
+      .filter((assignee) => selectedUserIds.includes(assignee.userId))
+      .map(async (assignee) => {
+        if (!assignee.user.discordUserId) {
+          await logger.warn("ACCEPTANCE", "Skipped assignment DM because owner has no Discord user ID", {
+            taskId,
+            userId: assignee.userId,
+            userName: assignee.user.name
+          });
+          return;
+        }
+
+        await sendDiscordDm(
+          assignee.user.discordUserId,
+          buildTaskAssignmentDmMessage({
+            title: task.title,
+            description: task.description,
+            assigneeName: assignee.user.name,
+            ownerNames: task.assignees.map((item) => item.user.name),
+            columnName: task.column.name,
+            taskUrl: getTaskUrl(task.id)
+          })
+        );
+      })
+  );
+}
+
 export async function sendTaskAcceptancePrompt(taskId: string, mentionUserIds?: string[], clarification?: string) {
   const token = process.env.DISCORD_BOT_TOKEN;
   const channelId = process.env.DISCORD_CHANNEL_ID;
@@ -401,6 +446,66 @@ function acceptanceStatusStyle(status: string): 1 | 2 | 3 | 4 {
 
 function truncateForDiscord(value: string, maxLength: number) {
   return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
+}
+
+function buildTaskAssignmentDmMessage(input: {
+  title: string;
+  description: string | null;
+  assigneeName: string;
+  ownerNames: string[];
+  columnName: string;
+  taskUrl: string;
+}) {
+  const details = input.description ? `\n\n${truncateForDiscord(input.description, 600)}` : "";
+  const message = [
+    `**New assignment for ${input.assigneeName}**`,
+    `**${formatDiscordTitle(input.title)}**${details}`,
+    `Owners: ${input.ownerNames.join(", ")}`,
+    `Column: ${input.columnName}`,
+    input.taskUrl
+  ].join("\n\n");
+
+  return truncateForDiscord(message, 1900);
+}
+
+async function sendDiscordDm(discordUserId: string, content: string) {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  if (!token) return;
+
+  const dmResponse = await fetch(`${DISCORD_API_BASE}/users/@me/channels`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ recipient_id: discordUserId })
+  });
+
+  if (!dmResponse.ok) {
+    await logger.warn("ACCEPTANCE", `Could not open Discord DM: ${dmResponse.status} ${await dmResponse.text()}`, {
+      discordUserId
+    });
+    return;
+  }
+
+  const dmChannel = (await dmResponse.json()) as { id?: string };
+  if (!dmChannel.id) return;
+
+  const messageResponse = await fetch(`${DISCORD_API_BASE}/channels/${dmChannel.id}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ content })
+  });
+
+  if (!messageResponse.ok) {
+    await logger.warn("ACCEPTANCE", `Discord assignment DM failed: ${messageResponse.status} ${await messageResponse.text()}`, {
+      discordUserId,
+      dmChannelId: dmChannel.id
+    });
+  }
 }
 
 function getMentionDiscordIds(acceptances: AcceptanceWithTaskUser[], mentionUserIds: Set<string>) {

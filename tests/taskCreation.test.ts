@@ -15,6 +15,17 @@ describe("task creation payload", () => {
     expect(parsed.isBlocked).toBe(false);
   });
 
+  it("accepts board-selected DM recipients for manual web tasks", () => {
+    const parsed = createTaskSchema.parse({
+      title: "Follow up with dealer",
+      assigneeIds: ["user-1", "user-2"],
+      dmUserIds: ["user-2"],
+      source: "WEB"
+    });
+
+    expect(parsed.dmUserIds).toEqual(["user-2"]);
+  });
+
   it("rejects blank titles before the database layer", () => {
     expect(() => createTaskSchema.parse({ title: " " })).toThrow();
   });

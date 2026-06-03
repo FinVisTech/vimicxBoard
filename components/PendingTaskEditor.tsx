@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, Plus, Save, Trash2, UserRound, X } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, Mail, Plus, Save, Trash2, UserRound, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-type User = { id: string; name: string };
+type User = { id: string; name: string; discordUserId?: string | null };
 
 type PendingTaskDraft = {
   id: string;
@@ -66,6 +66,7 @@ export function PendingTaskEditor({ task, users }: { task: PendingTaskDraft; use
   const router = useRouter();
   const [draft, setDraft] = useState<DraftState>(() => toDraftState(task, users));
   const [savedDraft, setSavedDraft] = useState<DraftState>(() => toDraftState(task, users));
+  const [dmAssignees, setDmAssignees] = useState<User[]>([]);
   const [state, setState] = useState<"idle" | "saving" | "approving" | "confirming" | "rejecting">("idle");
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -73,6 +74,11 @@ export function PendingTaskEditor({ task, users }: { task: PendingTaskDraft; use
   const isDirty = JSON.stringify(toPayload(draft)) !== JSON.stringify(toPayload(savedDraft));
   const canSave = draft.title.trim().length >= 2;
   const isBusy = state === "saving" || state === "approving" || state === "rejecting";
+
+  useEffect(() => {
+    const ownerIds = new Set(draft.assignees.map((user) => user.id));
+    setDmAssignees((current) => current.filter((user) => ownerIds.has(user.id)));
+  }, [draft.assignees]);
 
   function setField<K extends keyof DraftState>(field: K, value: DraftState[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -118,7 +124,11 @@ export function PendingTaskEditor({ task, users }: { task: PendingTaskDraft; use
 
     setState("approving");
     try {
-      const response = await fetch(`/api/pending-tasks/${task.id}/approve`, { method: "POST" });
+      const response = await fetch(`/api/pending-tasks/${task.id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dmUserIds: dmAssignees.map((user) => user.id) })
+      });
       if (!response.ok) throw new Error(await response.text());
       const result = (await response.json()) as { task: { id: string } };
       router.push(`/tasks/${result.task.id}`);
@@ -174,6 +184,12 @@ export function PendingTaskEditor({ task, users }: { task: PendingTaskDraft; use
             users={users}
             disabled={isBusy}
             onChange={(nextAssignees) => setField("assignees", nextAssignees)}
+          />
+          <PendingDraftDmPicker
+            dmAssignees={dmAssignees}
+            owners={draft.assignees}
+            disabled={isBusy}
+            onChange={setDmAssignees}
           />
           <label className="grid gap-1 text-sm font-semibold text-slate-600">
             Priority
@@ -247,6 +263,63 @@ export function PendingTaskEditor({ task, users }: { task: PendingTaskDraft; use
         ) : null}
       </div>
     </form>
+  );
+}
+
+function PendingDraftDmPicker({
+  dmAssignees,
+  owners,
+  disabled,
+  onChange
+}: {
+  dmAssignees: User[];
+  owners: User[];
+  disabled: boolean;
+  onChange: (assignees: User[]) => void;
+}) {
+  const selectedIds = new Set(dmAssignees.map((user) => user.id));
+
+  function toggleOwner(user: User) {
+    if (!user.discordUserId || disabled) return;
+    if (selectedIds.has(user.id)) {
+      onChange(dmAssignees.filter((assignee) => assignee.id !== user.id));
+      return;
+    }
+    onChange([...dmAssignees, user]);
+  }
+
+  return (
+    <div className="rounded-md bg-slate-50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">DM owners</p>
+
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {owners.length === 0 ? (
+          <span className="text-sm font-semibold text-slate-400">Add owners first</span>
+        ) : null}
+        {owners.map((user) => {
+          const selected = selectedIds.has(user.id);
+          const canDm = Boolean(user.discordUserId);
+          return (
+            <button
+              key={user.id}
+              type="button"
+              onClick={() => toggleOwner(user)}
+              disabled={disabled || !canDm}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                selected
+                  ? "border-primary bg-white text-primary"
+                  : "border-border bg-white text-slate-600 hover:border-primary hover:text-primary"
+              }`}
+              title={canDm ? undefined : "No Discord user ID mapped"}
+            >
+              <Mail className="h-3 w-3" />
+              {user.name}
+              {selected ? <Check className="h-3 w-3" /> : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

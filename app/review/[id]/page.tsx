@@ -18,7 +18,7 @@ export default async function PendingTaskPage({ params }: { params: Promise<{ id
       where: { id },
       include: { meetingCall: true }
     }),
-    prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })
+    prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, discordUserId: true } })
   ]);
 
   if (!pendingTask) notFound();

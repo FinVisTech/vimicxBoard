@@ -1,7 +1,7 @@
 import { type Source } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultBoard } from "@/lib/services/bootstrap";
-import { syncTaskAcceptances } from "@/lib/services/taskAcceptanceService";
+import { sendTaskAssignmentDms, syncTaskAcceptances } from "@/lib/services/taskAcceptanceService";
 import { createTaskSchema, updateTaskSchema } from "@/lib/validators/tasks";
 import type { ParsedBoardCommand } from "@/lib/validators/boardIntent";
 import { LOW_CONFIDENCE_THRESHOLD } from "@/lib/constants";
@@ -15,6 +15,7 @@ export async function createTask(input: unknown) {
   const assigneeIds: string[] = data.assigneeIds
     ?? (data.assigneeId ? [data.assigneeId] : null)
     ?? (data.assigneeName ? await findOrCreateUsersByNames(data.assigneeName) : []);
+  const dmUserIds = resolveWebDmUserIds(data.dmUserIds, assigneeIds, data.source);
 
   const task = await prisma.task.create({
     data: {
@@ -38,6 +39,9 @@ export async function createTask(input: unknown) {
 
   if (assigneeIds.length > 0) {
     await syncTaskAcceptances(task.id, assigneeIds);
+  }
+  if (dmUserIds.length > 0) {
+    await sendTaskAssignmentDms(task.id, dmUserIds);
   }
 
   return getTaskWithInclude(task.id);
@@ -207,6 +211,21 @@ async function findOrCreateDiscordUser(discordUserId: string) {
     create: { discordUserId, name: `Discord ${discordUserId.slice(-4)}` }
   });
   return user.id;
+}
+
+function resolveWebDmUserIds(dmUserIds: string[] | undefined, assigneeIds: string[], source: Source) {
+  const selected = [...new Set((dmUserIds ?? []).filter(Boolean))];
+  if (selected.length === 0) return [];
+  if (source !== "WEB") {
+    throw new Error("DM notifications can only be requested from web task creation.");
+  }
+
+  const ownerIds = new Set(assigneeIds);
+  if (selected.some((userId) => !ownerIds.has(userId))) {
+    throw new Error("DM recipients must already be task owners.");
+  }
+
+  return selected;
 }
 
 const taskInclude = {

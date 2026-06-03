@@ -8,6 +8,7 @@ export const createTaskSchema = z.object({
   assigneeName: z.string().trim().nullable().optional(),
   assigneeId: z.string().nullable().optional(),
   assigneeIds: z.array(z.string()).optional(),
+  dmUserIds: z.array(z.string()).optional(),
   columnName: z.string().default("To Do"),
   priority: priorityEnum.default("MEDIUM"),
   dueDate: z.string().datetime({ offset: true }).nullable().optional(),

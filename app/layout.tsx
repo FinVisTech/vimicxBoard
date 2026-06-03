@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { VimicxLogo } from "@/components/VimicxLogo";
 import { prisma } from "@/lib/prisma";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Vimicx Board",
-  description: "A fast team memory layer for Vimicx tasks."
+  description: "A fast team memory layer for Vimicx tasks.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg"
+  }
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -15,9 +21,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en">
       <body className="min-h-screen font-sans antialiased">
         <header className="border-b border-border bg-white">
-          <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
-            <Link href="/board" className="text-xl font-semibold tracking-normal">
-              Vimicx Board
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-2">
+            <Link href="/board" className="flex h-16 shrink-0 items-center" aria-label="Vimicx Board">
+              <VimicxLogo className="h-16 w-auto max-w-[190px]" />
             </Link>
             <nav className="flex items-center gap-4 text-sm font-medium text-slate-600">
               <Link href="/board">Board</Link>
@@ -41,4 +47,3 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     </html>
   );
 }
-

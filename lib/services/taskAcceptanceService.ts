@@ -399,7 +399,7 @@ function taskStatusButton(task: AcceptanceWithTaskUser["task"]) {
   return {
     type: 2,
     style: presentation.style,
-    label: `${presentation.marker} Status: ${presentation.label}`.slice(0, 80),
+    label: `${presentation.marker} Task Status: ${presentation.label}`.slice(0, 80),
     custom_id: `${CUSTOM_ID_PREFIX}:status:${task.id}`
   };
 }
@@ -452,6 +452,7 @@ function formatAcceptanceStatus(status: string) {
   if (status === "ACCEPTED") return "Accepted";
   if (status === "NEEDS_CLARIFICATION") return "Clarification needed";
   if (status === "REJECTED") return "Not accepted";
+  if (status === "PENDING") return "🟠 Pending";
   return "Pending";
 }
 
@@ -479,7 +480,7 @@ function getTaskBoardStatusPresentation(task: AcceptanceWithTaskUser["task"]): {
 function acceptanceStatusStyle(status: string): 1 | 2 | 3 | 4 {
   if (status === "ACCEPTED") return 3;
   if (status === "NEEDS_CLARIFICATION" || status === "REJECTED") return 4;
-  return 1;
+  return 2;
 }
 
 function truncateForDiscord(value: string, maxLength: number) {

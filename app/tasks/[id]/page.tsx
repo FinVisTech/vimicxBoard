@@ -39,6 +39,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
             <TaskDueDatePicker taskId={task.id} initialDueDate={task.dueDate ? task.dueDate.toISOString() : null} />
             <TaskPrioritySelect taskId={task.id} initialPriority={task.priority} />
             <TaskArchiveActions taskId={task.id} isArchived={Boolean(task.archivedAt)} />
+            <TaskStatusBadge status={formatTaskStatus(task.column.name, task.completedAt)} />
           </div>
         </div>
         <div className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
@@ -125,6 +126,19 @@ function acceptanceStatusClass(status: string) {
   if (status === "NEEDS_CLARIFICATION") return "bg-red-100 text-red-700";
   if (status === "REJECTED") return "bg-slate-200 text-slate-700";
   return "bg-amber-100 text-amber-700";
+}
+
+function formatTaskStatus(columnName: string, completedAt: Date | null) {
+  if (completedAt || columnName === "Done") return "Completed";
+  return columnName;
+}
+
+function TaskStatusBadge({ status }: { status: string }) {
+  return (
+    <div className="inline-flex h-10 items-center rounded-full border border-slate-200 bg-slate-100 px-4 text-sm font-semibold text-slate-700">
+      {status}
+    </div>
+  );
 }
 
 function Field({ label, value }: { label: string; value: string }) {

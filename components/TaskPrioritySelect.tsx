@@ -39,7 +39,7 @@ export function TaskPrioritySelect({ taskId, initialPriority }: { taskId: string
   }
 
   return (
-    <div className="flex flex-col items-start gap-2 sm:items-end">
+    <div className="flex w-full flex-col items-stretch gap-2">
       <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="task-priority">
         Priority
       </label>
@@ -48,7 +48,7 @@ export function TaskPrioritySelect({ taskId, initialPriority }: { taskId: string
         value={priority}
         onChange={(event) => updatePriority(event.target.value as Priority)}
         disabled={isSaving}
-        className={`rounded-full border px-3 py-1 text-sm font-semibold outline-none transition-colors ${priorityClassName[priority]}`}
+        className={`h-10 w-full rounded-md border px-3 text-sm font-semibold outline-none transition-colors ${priorityClassName[priority]}`}
       >
         {priorityOptions.map((option) => (
           <option key={option} value={option}>

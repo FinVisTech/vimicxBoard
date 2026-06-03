@@ -26,7 +26,7 @@ export function TaskArchiveActions({ taskId, isArchived }: { taskId: string; isA
 
   if (isArchived) {
     return (
-      <Button type="button" onClick={() => updateArchiveState(false)} disabled={isSaving} className="gap-2 bg-slate-900">
+      <Button type="button" onClick={() => updateArchiveState(false)} disabled={isSaving} className="h-10 w-full justify-center gap-2 rounded-md bg-slate-900 px-3">
         <RotateCcw className="h-4 w-4" />
         Restore
       </Button>
@@ -34,7 +34,7 @@ export function TaskArchiveActions({ taskId, isArchived }: { taskId: string; isA
   }
 
   return (
-    <Button type="button" onClick={() => updateArchiveState(true)} disabled={isSaving} className="gap-2 bg-slate-900">
+    <Button type="button" onClick={() => updateArchiveState(true)} disabled={isSaving} className="h-10 w-full justify-center gap-2 rounded-md bg-slate-900 px-3">
       <Archive className="h-4 w-4" />
       Archive
     </Button>

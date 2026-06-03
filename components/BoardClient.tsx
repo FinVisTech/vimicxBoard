@@ -375,8 +375,10 @@ function AddTaskPanel({ columns, allPeople, onTaskCreated }: { columns: Column[]
               ))}
             </select>
           </label>
+          <div className="sm:col-start-3">
+            <AddTaskDmPicker dmAssignees={dmAssignees} owners={assignees} disabled={isSaving} onChange={setDmAssignees} />
+          </div>
         </div>
-        <AddTaskDmPicker dmAssignees={dmAssignees} owners={assignees} disabled={isSaving} onChange={setDmAssignees} />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">

@@ -1,7 +1,7 @@
 import { type Source } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultBoard } from "@/lib/services/bootstrap";
-import { sendTaskAssignmentDms, syncTaskAcceptances } from "@/lib/services/taskAcceptanceService";
+import { refreshTaskAcceptancePromptMessage, sendTaskAssignmentDms, syncTaskAcceptances } from "@/lib/services/taskAcceptanceService";
 import { createTaskSchema, updateTaskSchema } from "@/lib/validators/tasks";
 import type { ParsedBoardCommand } from "@/lib/validators/boardIntent";
 import { LOW_CONFIDENCE_THRESHOLD } from "@/lib/constants";
@@ -92,7 +92,14 @@ export async function updateTask(taskId: string, input: unknown) {
 
   if (assigneesUpdate) {
     await syncTaskAcceptances(task.id, task.assignees.map((assignee) => assignee.user.id));
+    if (columnChanged) {
+      await refreshTaskAcceptancePromptMessage(task.id);
+    }
     return getTaskWithInclude(task.id);
+  }
+
+  if (columnChanged) {
+    await refreshTaskAcceptancePromptMessage(task.id);
   }
 
   return task;

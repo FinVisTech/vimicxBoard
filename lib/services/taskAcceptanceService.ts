@@ -7,7 +7,7 @@ const CUSTOM_ID_PREFIX = "task-owner";
 const MAX_INTERACTIVE_OWNERS = 4;
 
 type AcceptanceWithTaskUser = Prisma.TaskAcceptanceGetPayload<{
-  include: { task: true; user: true; clarificationComment: true };
+  include: { task: { include: { column: true } }; user: true; clarificationComment: true };
 }>;
 
 type DiscordMessageView = {
@@ -330,6 +330,14 @@ export async function editAcceptancePromptMessage(acceptance: AcceptanceWithTask
   }
 }
 
+export async function refreshTaskAcceptancePromptMessage(taskId: string) {
+  const acceptances = await getTaskAcceptances(taskId);
+  const target = acceptances.find((acceptance) => acceptance.discordChannelId && acceptance.discordMessageId);
+  if (!target) return;
+
+  await editAcceptancePromptMessage(target, buildTaskAcceptancePanelView(acceptances));
+}
+
 export function buildAcceptedAcceptanceView(acceptance: AcceptanceWithTaskUser): DiscordMessageView {
   return buildTaskAcceptancePanelView([{ ...acceptance, status: "ACCEPTED" }]);
 }
@@ -365,7 +373,7 @@ export function buildTaskAcceptancePanelView(
     ? `\n\nClarification added:\n${truncateForDiscord(options.clarification, 500)}`
     : "";
 
-  const rows = first ? [actionRow([openTaskButton(first.taskId)])] : [];
+  const rows = first ? [actionRow([openTaskButton(first.taskId), taskStatusButton(first.task)])] : [];
   rows.push(...acceptances.slice(0, MAX_INTERACTIVE_OWNERS).map((acceptance) => actionRow(ownerActionButtons(acceptance))));
 
   return {
@@ -380,6 +388,16 @@ function actionRow(components: Array<Record<string, unknown>>): DiscordMessageVi
 
 function openTaskButton(taskId: string) {
   return { type: 2, style: 5, label: "Open task", url: getTaskUrl(taskId) };
+}
+
+function taskStatusButton(task: AcceptanceWithTaskUser["task"]) {
+  return {
+    type: 2,
+    style: task.completedAt || task.column.name === "Done" ? 3 : 2,
+    label: `Status: ${formatTaskBoardStatus(task)}`.slice(0, 80),
+    custom_id: `${CUSTOM_ID_PREFIX}:status:${task.id}`,
+    disabled: true
+  };
 }
 
 function ownerActionButtons(acceptance: AcceptanceWithTaskUser) {
@@ -431,6 +449,11 @@ function formatAcceptanceStatus(status: string) {
   if (status === "NEEDS_CLARIFICATION") return "Clarification needed";
   if (status === "REJECTED") return "Not accepted";
   return "Pending";
+}
+
+function formatTaskBoardStatus(task: AcceptanceWithTaskUser["task"]) {
+  if (task.completedAt || task.column.name === "Done") return "Completed";
+  return task.column.name;
 }
 
 function acceptanceStatusStyle(status: string): 1 | 2 | 3 | 4 {
@@ -523,7 +546,7 @@ async function getTaskAcceptances(taskId: string) {
 }
 
 const acceptanceInclude = {
-  task: true,
+  task: { include: { column: true } },
   user: true,
   clarificationComment: true
 } satisfies Prisma.TaskAcceptanceInclude;

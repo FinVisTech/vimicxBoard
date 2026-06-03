@@ -35,11 +35,11 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
             <p className="text-sm font-semibold text-slate-500">{task.column.name}</p>
             <h1 className="mt-1 text-3xl font-bold">{task.title}</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="grid w-full max-w-[304px] grid-cols-2 gap-3 sm:w-[304px]">
             <TaskDueDatePicker taskId={task.id} initialDueDate={task.dueDate ? task.dueDate.toISOString() : null} />
             <TaskPrioritySelect taskId={task.id} initialPriority={task.priority} />
-            <TaskArchiveActions taskId={task.id} isArchived={Boolean(task.archivedAt)} />
             <TaskStatusBadge status={formatTaskStatus(task.column.name, task.completedAt)} />
+            <TaskArchiveActions taskId={task.id} isArchived={Boolean(task.archivedAt)} />
           </div>
         </div>
         <div className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
@@ -135,7 +135,7 @@ function formatTaskStatus(columnName: string, completedAt: Date | null) {
 
 function TaskStatusBadge({ status }: { status: string }) {
   return (
-    <div className="inline-flex h-10 items-center rounded-full border border-slate-200 bg-slate-100 px-4 text-sm font-semibold text-slate-700">
+    <div className="inline-flex h-10 w-full items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-700">
       {status}
     </div>
   );

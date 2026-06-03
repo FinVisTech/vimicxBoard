@@ -129,6 +129,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   try {
     if (interaction.isButton()) {
+      if (parsed.action === "STATUS") {
+        await interaction.reply({ content: "This status updates automatically from vimicxBoard.", ephemeral: true });
+        return;
+      }
+
       if (parsed.action === "ACCEPT") {
         const result = await acceptTaskOwnership(parsed.taskId, parsed.userId, interaction.user.id);
         if (!result.ok) {

@@ -106,12 +106,7 @@ export async function sendTaskAssignmentDms(taskId: string, userIds: string[]) {
         await sendDiscordDm(
           assignee.user.discordUserId,
           buildTaskAssignmentDmMessage({
-            title: task.title,
-            description: task.description,
-            assigneeName: assignee.user.name,
-            ownerNames: task.assignees.map((item) => item.user.name),
-            columnName: task.column.name,
-            taskUrl: getTaskUrl(task.id)
+            title: task.title
           })
         );
       })
@@ -450,19 +445,10 @@ function truncateForDiscord(value: string, maxLength: number) {
 
 function buildTaskAssignmentDmMessage(input: {
   title: string;
-  description: string | null;
-  assigneeName: string;
-  ownerNames: string[];
-  columnName: string;
-  taskUrl: string;
 }) {
-  const details = input.description ? `\n\n${truncateForDiscord(input.description, 600)}` : "";
   const message = [
-    `**New assignment for ${input.assigneeName}**`,
-    `**${formatDiscordTitle(input.title)}**${details}`,
-    `Owners: ${input.ownerNames.join(", ")}`,
-    `Column: ${input.columnName}`,
-    input.taskUrl
+    "Please go check the vimicxBoard channel to accept or ask for clarification on this particular task/deliverable:",
+    `**${formatDiscordTitle(input.title)}**`
   ].join("\n\n");
 
   return truncateForDiscord(message, 1900);

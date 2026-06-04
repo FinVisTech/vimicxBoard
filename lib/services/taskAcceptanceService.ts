@@ -394,6 +394,7 @@ function openTaskButton(taskId: string) {
 }
 
 function taskStatusButton(task: AcceptanceWithTaskUser["task"]) {
+<<<<<<< HEAD
   const presentation = getTaskBoardStatusPresentation(task);
 
   return {
@@ -401,6 +402,14 @@ function taskStatusButton(task: AcceptanceWithTaskUser["task"]) {
     style: presentation.style,
     label: `${presentation.marker} Task Status: ${presentation.label}`.slice(0, 80),
     custom_id: `${CUSTOM_ID_PREFIX}:status:${task.id}`
+=======
+  return {
+    type: 2,
+    style: task.completedAt || task.column.name === "Done" ? 3 : 2,
+    label: `Status: ${formatTaskBoardStatus(task)}`.slice(0, 80),
+    custom_id: `${CUSTOM_ID_PREFIX}:status:${task.id}`,
+    disabled: true
+>>>>>>> 16a7ff3 (Keep acceptance status badge colored after owner responds)
   };
 }
 
@@ -425,7 +434,12 @@ function ownerActionButtons(acceptance: AcceptanceWithTaskUser) {
       custom_id: `${CUSTOM_ID_PREFIX}:clarify:${acceptance.taskId}:${acceptance.userId}`,
       disabled: !isPending
     },
-    disabledButton(formatAcceptanceStatus(acceptance.status), acceptanceStatusStyle(acceptance.status), "status", acceptance.taskId, acceptance.userId)
+    {
+      type: 2,
+      style: acceptanceStatusStyle(acceptance.status),
+      label: formatAcceptanceStatus(acceptance.status).slice(0, 80),
+      custom_id: `${CUSTOM_ID_PREFIX}:status:${acceptance.taskId}:${acceptance.userId}`
+    }
   ];
 }
 
@@ -457,6 +471,7 @@ function formatAcceptanceStatus(status: string) {
 }
 
 function formatTaskBoardStatus(task: AcceptanceWithTaskUser["task"]) {
+<<<<<<< HEAD
   return getTaskBoardStatusPresentation(task).label;
 }
 
@@ -475,6 +490,10 @@ function getTaskBoardStatusPresentation(task: AcceptanceWithTaskUser["task"]): {
   if (normalized === "backlog") return { label: columnName, marker: "⚫", style: 2 };
 
   return { label: columnName, marker: "⚪", style: 2 };
+=======
+  if (task.completedAt || task.column.name === "Done") return "Completed";
+  return task.column.name;
+>>>>>>> 16a7ff3 (Keep acceptance status badge colored after owner responds)
 }
 
 function acceptanceStatusStyle(status: string): 1 | 2 | 3 | 4 {
